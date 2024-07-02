@@ -16,6 +16,7 @@ library(fgsea)
 library(ComplexHeatmap)
 
 IN_FOLDER <- "/Users/ieo6983/Desktop/expression/"
+OUT_FOLDER_DEGs <- "/Users/ieo6983/Desktop/expression/DEGs/"
 setwd(IN_FOLDER)
 ```
 
@@ -165,42 +166,6 @@ pcaData <- plotPCA(vsd, intgroup=c("condition"), returnData=TRUE)
 
 ```
 
-_Interpreting loadings:_
-_Magnitude of Loadings_: The magnitude of a gene's loading represents the strength of its contribution to a particular principal component. Larger absolute values indicate stronger contributions.
-_Sign of Loadings_: The sign of a gene's loading indicates the direction of its contribution to the principal component. Positive loadings suggest that higher expression of the gene is associated with higher values of the principal component, while negative loadings suggest the opposite.
-```{r}
-norm_counts <- assay(vsd)
-pca_result <- prcomp(t(norm_counts), scale. = F)
-
-pca_df <- as.data.frame(pca_result$x)
-pca_df$group <- as.factor(coldata$condition)
-pca_df$batch <- as.factor(coldata$batch)
-
-ggplot(pca_df, aes(x = PC1, y = PC2, color = group, shape = batch)) +
-  geom_point(size = 3)+ 
-  theme_light()
-
-# Extract the loadings of genes on the first two principal components
-gene_loadings <- as.data.frame(pca_result$rotation[, 1])
-colnames(gene_loadings) <- "PCA_1"
-head(gene_loadings)
-
-top_pos_pc1 <- gene_loadings %>% top_n(., wt = PCA_1, n = 20) %>% mutate(., direction = "top_pos")
-top_neg_pc1 <- gene_loadings %>% top_n(., wt = -PCA_1, n = 20) %>% mutate(., direction = "top_neg")
-top_pc1 <- rbind(top_pos_pc1, top_neg_pc1)
-top_pc1 <- top_pc1 %>% rownames_to_column(., "gene_id") %>%
-  left_join(id_to_gene, by = "gene_id") %>%
-  select(gene_name, PCA_1)
-
-# heatmap 
-ggplot(top_pc1, aes(x = 1, y = reorder(gene_name, PCA_1), fill = PCA_1)) +
-  geom_tile() +
-  scale_fill_gradient(low = "blue", high = "red") +
-  theme_minimal() +
-  labs(x = NULL, y = "Gene", fill = "PC1_loading")
-
-```
-
 
 ```{r}
 #Heatmap of the sample-to-sample distances
@@ -275,7 +240,7 @@ df_export <- as.data.frame(resOrdered) %>%
   left_join(., id_to_gene, by = "gene_id") %>%
   relocate(., gene_name, .after = gene_id)
 
-#write.csv(df_export, file="DEGs_Condition_GRHL2KD_SCR.csv")
+#write.csv(df_export, file=paste0(OUT_FOLDER_DEGs, "DEGs_Condition_GRHL2KD_SCR.csv"))
 
 ```
 
@@ -368,9 +333,8 @@ top_DEGs <- df_LFC %>% filter(padj <= significance_threshold & abs(log2FoldChang
 p2 + geom_text(data = top_DEGs, aes(label = gene_name), hjust = -0.1, vjust = 0)
 
 # Based on specific genes
-spec_genes <- c("GRHL2", "GRHL1", "CDH1", "CDH2", "SNAI1", "SNAI2", "ZEB1","TWIST1", 
-                    "VIM", "RBBP8", "OVOL1", "OVOL2")
-spec_genes <- spec_genes[specific_genes %in% df_LFC$gene_name]
+spec_genes <- c("GRHL2", "GRHL1", "CDH1", "CDH2", "SNAI1", "SNAI2", "ZEB1","TWIST1", "VIM", "RBBP8", "OVOL1", "OVOL2")
+spec_genes <- spec_genes[spec_genes %in% df_LFC$gene_name]
 spec_genes <- df_LFC[df_LFC$gene_name %in% spec_genes, ]
 p2 + geom_text(data = spec_genes, aes(label = gene_name), hjust = -0.1, vjust = 0)
 #p2 + geom_point(data = spec_genes, fill = "white", color = "black", size = 2)
@@ -392,44 +356,29 @@ df_LFC_sig$DE <- ifelse(df_LFC_sig$log2FoldChange > 0, "Up", "Down")
 # df_LFC (shrinked) is a smaller version wrt df_export
 sum(!df_LFC_sig$gene_name %in% df_export_sig$gene_name)
 
-#df_LFC_sig %>% arrange(., log2FoldChange) %>% write_tsv(., "./Df_DEGs.df_LFC_sig.padj_0.01.log2FC_1.Up_and_Down.tsv")
+#df_LFC_sig %>% arrange(., log2FoldChange) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "./Df_DEGs.df_LFC_sig.padj_0.01.log2FC_1.Up_and_Down.tsv"))
 
 ```
 
-```{r}
-# Marta's DEGs
-marta_degs <- read.csv("./from_marta/KD_vs_SCR_DEGs.csv")
-dim(marta_degs)
-
-sum(!marta_degs$FDR <= 0.05) # Marta put a threshold on the p-value and NOT on the FDR
-sum(!abs(marta_degs$logFC) >= 0.5) # log2FC threshold = 0.5
-
-sum(!marta_degs$GeneName %in% df_export_sig$gene_name)
-sum(!marta_degs$GeneName %in% df_LFC_sig$gene_name)
-
-marta_degs$DE <- ifelse(marta_degs$logFC > 0, "Up", "Down")
-table(marta_degs$DE)
-
-#data.frame(marta_degs[marta_degs$DE == "Up", ]$GeneName) %>% write_tsv(., "./MARTA_DEGs.Up.names.tsv", col_names = F)
-#data.frame(marta_degs[marta_degs$DE == "Down", ]$GeneName) %>% write_tsv(., "./MARTA_DEGs.Down.names.tsv", col_names = F)
-```
 
 
 ## Enrichment analysis 
 ```{r}
-#data.frame(df_LFC_sig[df_LFC_sig$DE == "Up", ]$gene_id) %>% write_tsv(., "./DEGs.df_LFC_sig.padj_0.05.log2FC_1.UP.tsv", col_names = F)
-#data.frame(df_LFC_sig[df_LFC_sig$DE == "Up", ]$gene_name) %>% write_tsv(., "./DEGs.df_LFC_sig.padj_0.05.log2FC_1.UP.names.tsv", col_names = F)
+# Save gene sets for DGE analysis
 
-#data.frame(df_LFC_sig[df_LFC_sig$DE == "Down", ]$gene_id) %>% write_tsv(., "./DEGs.df_LFC_sig.padj_0.05.log2FC_1.DOWN.tsv", col_names = F)
-#data.frame(df_LFC_sig[df_LFC_sig$DE == "Down", ]$gene_name) %>% write_tsv(., "./DEGs.df_LFC_sig.padj_0.05.log2FC_1.DOWN.names.tsv", col_names = F)
+#data.frame(df_LFC_sig[df_LFC_sig$DE == "Up", ]$gene_id) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_LFC_sig.padj_0.05.log2FC_1.UP.tsv"), col_names = F)
+#data.frame(df_LFC_sig[df_LFC_sig$DE == "Up", ]$gene_name) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_LFC_sig.padj_0.05.log2FC_1.UP.names.tsv"), col_names = F)
+
+#data.frame(df_LFC_sig[df_LFC_sig$DE == "Down", ]$gene_id) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_LFC_sig.padj_0.05.log2FC_1.DOWN.tsv"), col_names = F)
+#data.frame(df_LFC_sig[df_LFC_sig$DE == "Down", ]$gene_name) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_LFC_sig.padj_0.05.log2FC_1.DOWN.names.tsv"), col_names = F)
 
 
 # Not shrinked
-#data.frame(df_export_sig[df_export_sig$DE == "Up", ]$gene_id) %>% write_tsv(., "./DEGs.df_export_sig.padj_0.05.log2FC_1.UP.tsv", col_names = F)
-#data.frame(df_export_sig[df_export_sig$DE == "Up", ]$gene_name) %>% write_tsv(., "./DEGs.df_export_sig.padj_0.05.log2FC_1.UP.names.tsv", col_names = F)
+#data.frame(df_export_sig[df_export_sig$DE == "Up", ]$gene_id) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_export_sig.padj_0.05.log2FC_1.UP.tsv"), col_names = F)
+#data.frame(df_export_sig[df_export_sig$DE == "Up", ]$gene_name) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_export_sig.padj_0.05.log2FC_1.UP.names.tsv"), col_names = F)
 
-#data.frame(df_export_sig[df_export_sig$DE == "Down", ]$gene_id) %>% write_tsv(., "./DEGs.df_export_sig.padj_0.05.log2FC_1.Down.tsv", col_names = F)
-#data.frame(df_export_sig[df_export_sig$DE == "Down", ]$gene_name) %>% write_tsv(., "./DEGs.df_export_sig.padj_0.05.log2FC_1.Down.names.tsv", col_names = F)
+#data.frame(df_export_sig[df_export_sig$DE == "Down", ]$gene_id) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_export_sig.padj_0.05.log2FC_1.Down.tsv"), col_names = F)
+#data.frame(df_export_sig[df_export_sig$DE == "Down", ]$gene_name) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_export_sig.padj_0.05.log2FC_1.Down.names.tsv"), col_names = F)
 
 ```
 
@@ -494,6 +443,8 @@ for(source in names(table(res_down$source))){
 
 ```
 
+Alternatively, DGE can be easily run from EnrichR web tool: https://maayanlab.cloud/Enrichr/. 
+
 
 ### GSEA 
 Inputs: 
@@ -556,8 +507,9 @@ g1 <- ggplot(filtRes, aes(reorder(pathway, NES), NES)) +
 }
 ```
 
+GSEA gene sets can be downloaded from: https://www.gsea-msigdb.org/gsea/msigdb/ 
 ```{r}
-# Gene sets
+# Gene sets 
 onco_sig <- "GSEA/DB/oncogenic_signature_gene_sets.c6.all.v2023.2.Hs.symbols.gmt"
 hallmark <- "GSEA/DB/hallmark_gene_sets.h.all.v2023.2.Hs.symbols.gmt"
 
@@ -572,18 +524,20 @@ names(ranked_genes) <- ranked_genes_df$gene_name
 ```{r}
 GSEA(gene_list = ranked_genes, GO_file = onco_sig, pval = 0.05)
 ```
+
 ```{r}
 p <- GSEA(ranked_genes, hallmark, pval = 0.05)
 print(p$Plot)
 
-#ggsave(plot = p$Plot, filename = "./GSEA/Plots/GSEA.DB_h.all.v2023.2.Hs.top_10.png", device = "png", 
-        width = 10, height = 6)
+#ggsave(plot = p$Plot, filename = "./GSEA/Plots/GSEA.DB_h.all.v2023.2.Hs.top_10.png", device = "png", width = 10, height = 6)
 ```
 
 ```{r}
 hallmark_set = fgsea::gmtPathways(hallmark)
 hallmark_emt <- hallmark_set$HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION
 length(hallmark_emt)
+
+norm_counts <- assay(vsd)
 
 norm_counts_df <- as.data.frame(norm_counts) %>%
   rownames_to_column(., "gene_id") %>% 
@@ -643,40 +597,4 @@ h3 <- Heatmap(z_scores, name = "z-score", column_title = "DE EMT genes expressio
         cluster_rows = F, cluster_columns = T, row_order = row_order1, col = my_colors)
 print(h3)
 ```
-
-
-
-TODO:
-- Rifare partendo da quant.sf file 
-
-- GO Analysis miei geni + Marta 
-(+ guardare se ci sono i geni di Lorenzo - mettere nel vulcano)
-- GSEA analysis 
-(+ heatmap espressione GRHL2KD vs. SCR, con anche NT e TGF)
-
--------------------------------------------------
-Technical:
-- relax padj thereshold? / relax log2FC threshold / Non usare shrinked version
-- provare a far andare pipeline partendo da quant.sf file (output di Salmon?)
-
-- Highlight some genes in the vulcano: CDH1 (cadherin, should be Down) + wait for Lorenzo
-  (Da capire QUALI, se in base a padj, o log2FC, o specifici)
-GRHL2
-GRHL1
-CDH1
-CDH2
-SNAI1
-SNAI2
-ZEB1
-TWIST1
-VIM
-RBBP8
-OVOL1
-OVOL2
-
-
-New:
-- ctbp (co-localizza con CtIP)
-
-
 
