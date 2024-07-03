@@ -1,5 +1,10 @@
 
 ### loops_integrated_annotation_Method1 ###
+#'
+#' @description
+#' This script is used to annotate loops to GRHL2 enhancers and DEGs promoters 
+#' Loops were annotated according to 'Method 1', namely considering a window of +/- 1 bin
+#' to define if a loop bin overlaps one enhancer or one DEG promoter
 
 library(fs)  
 library(tidyverse)
