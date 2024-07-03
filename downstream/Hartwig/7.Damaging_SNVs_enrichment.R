@@ -8,7 +8,7 @@ set.seed(SEED)
 
 WIN <- 1000
 MARKERS <- c("CtIP", "GRHL")
-motif_thresh <- 50 
+motif_thresh <- 40 
 
 path_variants_anno <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/data/damaging_variants_annotation/")
 path_anno_ehnacers <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/annotated_enhancers/2kb_GRHL2_enhancers.from_SCR_specific_loops.linked_to_DOWN_DEGs.tsv")
@@ -24,7 +24,7 @@ for(marker in MARKERS){
   # Load inputs
   variants_anno <- read_tsv(
     fs::path(path_variants_anno, paste0("Table_enh_SSMs_", marker, ".all_overlaps.", WIN, "bp_WIN.with_damaging_anno.motif_thresh_", motif_thresh, ".tsv")))  
-  variants_anno$damaging <- factor(variants_anno$damaging, levels = c(1,2,0))
+  variants_anno$damaging <- factor(variants_anno$damaging, levels = c(1,2,3))
   
   print(paste0("Total number of SNVs within all enhancers, across all patients: ", dim(variants_anno)[1]))
   print("How many damaging?")
@@ -69,21 +69,21 @@ for(marker in MARKERS){
     print(table(variants_anno$damaging, variants_anno$enh_anno))
     print(fisher.test(table(variants_anno$damaging, variants_anno$enh_anno)))
     
-    variants_anno_1_0 <- variants_anno %>% dplyr::filter(., damaging == 1 | damaging == 0)
-    variants_anno_1_0$damaging <- droplevels(variants_anno_1_0$damaging)
-    print(table(variants_anno_1_0$damaging, variants_anno_1_0$enh_anno))
-    print(fisher.test(table(variants_anno_1_0$damaging, variants_anno_1_0$enh_anno)))
+    variants_anno_1_3 <- variants_anno %>% dplyr::filter(., damaging == 1 | damaging == 3)
+    variants_anno_1_3$damaging <- droplevels(variants_anno_1_3$damaging)
+    print(table(variants_anno_1_3$damaging, variants_anno_1_3$enh_anno))
+    print(fisher.test(table(variants_anno_1_3$damaging, variants_anno_1_3$enh_anno)))
     
     # Trying with a binary classification
     print("Trying with a binary classification")
     # Level 2 becomes damaging (Level 1)
-    variants_anno_1_0 <- variants_anno %>% mutate(., damaging = ifelse(damaging == 2, 1, damaging))
-    print(table(variants_anno_1_0$damaging, variants_anno_1_0$enh_anno))
-    print(fisher.test(table(variants_anno_1_0$damaging, variants_anno_1_0$enh_anno)))
+    variants_anno_1_3 <- variants_anno %>% mutate(., damaging = ifelse(damaging == 2, 1, damaging))
+    print(table(variants_anno_1_3$damaging, variants_anno_1_3$enh_anno))
+    print(fisher.test(table(variants_anno_1_3$damaging, variants_anno_1_3$enh_anno)))
     # Level 2 becomes damaging (Level 1)
-    variants_anno_1_0 <- variants_anno %>% mutate(., damaging = ifelse(damaging == 2, 3, damaging))
-    print(table(variants_anno_1_0$damaging, variants_anno_1_0$enh_anno))
-    print(fisher.test(table(variants_anno_1_0$damaging, variants_anno_1_0$enh_anno)))
+    variants_anno_1_3 <- variants_anno %>% mutate(., damaging = ifelse(damaging == 2, 3, damaging))
+    print(table(variants_anno_1_3$damaging, variants_anno_1_3$enh_anno))
+    print(fisher.test(table(variants_anno_1_3$damaging, variants_anno_1_3$enh_anno)))
     
   }  
 
