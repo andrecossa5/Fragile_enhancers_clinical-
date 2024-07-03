@@ -161,9 +161,7 @@ for(marker in MARKERS){
     
     # Save enh_SSMs objects - intermediate object useful for all the ubsequent analyses
     enh_SSMs <- enh_SSMs %>% relocate(., summit, .before = start) 
-    write_tsv(enh_SSMs, 
-              paste0(OUT_FOLDER_DATA, sprintf("Table_enh_SSMs_%s.all_overlaps.%s%s_WIN.with_AFs.tsv", marker, WIN/1000, UNIT)))
-    
+    enh_SSMs %>% write_tsv(., "/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/enhancers_SSMs_overlaps/data/Table_enh_SSMs_", marker, ".all_overlaps.", WIN, "bp_WIN.tsv")
   }
 
   ### Compute stats for plots - all datasets
@@ -243,6 +241,9 @@ OUT_FOLDER <- fs::path("/Users/ieo6983/Desktop/enhancers_project_old/per_ivan/")
 #enh_SSMs_all[["CtIP"]] %>% dplyr::select(., icgc_donor_id, icgc_mutation_id, seqnames_sbj, start_sbj, end_sbj, mutation_type, mutated_from_allele, mutated_to_allele, name, cluster) %>% write_tsv(fs::path(OUT_FOLDER, "Table_enh_SSMs_CtIP.all_overlaps.1kb_WIN.ICGC.ivan.tsv"))
 
 #enh_SSMs_all[["GRHL"]] %>% dplyr::select(., icgc_donor_id, icgc_mutation_id, seqnames_sbj, start_sbj, end_sbj, mutation_type, mutated_from_allele, mutated_to_allele, name, cluster) %>% write_tsv(fs::path(OUT_FOLDER, "Table_enh_SSMs_GRHL.all_overlaps.1kb_WIN.ICGC.ivan.tsv"))
+
+# Save tables
+#enh_SSMs_all$GRHL %>% write_tsv(., "/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/enhancers_SSMs_overlaps/data/Table_enh_SSMs_GRHL.all_overlaps.1000bp_WIN.tsv")
 
 ```
 
