@@ -1,4 +1,12 @@
 
+#' Annotate loops to enhancers and DEGs promoters
+#'
+#' @description
+#' This script is used to annotate loops to GRHL2 enhancers and DEGs promoters
+#' And to generate a unique table containing both SCR and KD loops 
+#' 
+
+
 library(fs)  # File manipulations
 library(tidyverse)
 
