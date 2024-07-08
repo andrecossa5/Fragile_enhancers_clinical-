@@ -1,9 +1,15 @@
 
 #'Annotate SVs as damaging or non-damaging
 #'
+#'
+#'@Deletion is damaging if 1 bkpt falls within E - P region and the other one falls outside. 
+#'Deletions in which both bpts fall within E - P region bring enhancer and promoter closer.
+#'@Interchromosomal-translocation is damaging if 1 bkpt falls within E - P region and the other one falls outside.
+#'two bkpts of the same SV cannot fall within the same loops, because they fall in different chromosomes.
 
 library(tidyverse)
 library(GenomicRanges)
+#library(assertthat)
 
 SEED <- 4321
 set.seed(SEED)
@@ -12,11 +18,35 @@ set.seed(SEED)
 marker <- "GRHL"
 WIN <- 3000 # enhancers window that was used to compute overlap with SVs
 loops_kb <- 2
+naive <- F
 
 path_SVs <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/raw_ICGC/structural_somatic_mutation.tsv")
 path_loops <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/", loops_kb, "kb/data/2kb_Unified_table.SCR_plus_KD_counts.all_anno_loops.ENH_DEGs_any.tsv"))
 path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/others/Cluster_GRHL_Enh_All.txt")
   
+
+##
+
+
+# TODO: naive function. Could make it handle more cases. 
+anno_true_damaging <- function(df, col1, col2){
+  col1_str <- df[, col1]  
+  col2_str <- df[, col2]
+  
+  # Given that SVs are right-oriented, loop 2 comes AFTER loop 1 (at least for 1 bin)
+  col1_split <- str_split(col1_str, pattern = "_", simplify = T)
+  col2_split <- str_split(col2_str, pattern = "_", simplify = T)
+  
+  # loop2-start > loop1-end
+  cond1 <- (as.numeric(col2_split[, 2])) > (as.numeric(col1_split[, 3]))
+  
+  # If NA | TRUE = damaging. If FALSE = false_damaging
+  df$true_dam <- F
+  df$true_dam[ (is.na(cond1) | cond1 == TRUE) ] <- T
+  
+  return(df)
+}
+
 
 ##
 
@@ -37,11 +67,11 @@ print(table(SVs$variant_type))
 
 ## Simplify variant types (leaving out variant_type = "tandem duplication")
 variant_types_complex <- c("deletion", "inversion", "interchromosomal rearrangement - unknown type")
-variant_types_simple <- c("deletion", "inversion", "rearrangement-translocation")
+variant_types_simple <- c("deletion", "inversion", "interchromosomal-translocation")
 types_conv <- data.frame("complex" = variant_types_complex, "simple" = variant_types_simple)
 
-SVs_full <- SVs_full %>% left_join(., types_conv, by = c("variant_type" = "complex")) %>%
-      rename(., "variant_type_simple" = "simple") %>% relocate(., variant_type_simple, .after = variant_type)
+SVs_full <- SVs_full %>% left_join(., types_conv, by = c("variant_type" = "complex")) %>% 
+  rename(., "simple" = "variant_type_simple") %>% relocate(., variant_type_simple, .after = variant_type)
 SVs_full$chr_from <- paste0("chr", SVs_full$chr_from)
 SVs_full$chr_to <- paste0("chr", SVs_full$chr_to)
 # Reduce to useful columns
@@ -74,70 +104,123 @@ for(type in unique(SVs$variant_type_simple)){
     print(paste0("--- Annotating variants of type: ", type, " ---"))
     print(paste0("Total number of ", type, " : ", dim(dels)[1]))
 
-    # Check whether bkpt 1 and bkpt 2 of overlap with one E - P region
-    dels_from <- makeGRangesFromDataFrame(dels[, c("chr_from", "chr_from_bkpt")], seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt")
-    dels_to <- makeGRangesFromDataFrame(dels[, c("chr_to", "chr_to_bkpt")], seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt")
-    
-    filt_from <- !is.na(findOverlaps(dels_from, loops_enh_deg_gr, select = "arbitrary"))
-    filt_to <- !is.na(findOverlaps(dels_to, loops_enh_deg_gr, select = "arbitrary"))
-    
-    dels$ovrlp_from <- F
-    dels$ovrlp_to <- F
-    dels[filt_from, ]$ovrlp_from <- T
-    dels[filt_to, ]$ovrlp_to <- T
-    
-    # Is deletion damaging? How many damaging deletions over total?
-    dam_vec <- dels$ovrlp_from + dels$ovrlp_to
-    dels$damaging <- F
-    dels[dam_vec == 1, ]$damaging <- T
-    
-    print(paste0("Damaging deletions: ", sum(dels$damaging), " over ", length(dels$damaging), 
-                 " (", round(sum(dels$damaging) / length(dels$damaging),2)*100, "%)")) 
+    if(naive == T){
+      # Check whether bkpt 1 and bkpt 2 of overlap with one E - P region
+      dels_from <- makeGRangesFromDataFrame(dels[, c("chr_from", "chr_from_bkpt")], seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt")
+      dels_to <- makeGRangesFromDataFrame(dels[, c("chr_to", "chr_to_bkpt")], seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt")
       
-    # TODO: add identity of loop/enhancer affected by SV
-    # Something like this:
-    #hits <- findOverlaps(query = dels_from, subject = loops_enh_deg_gr)
-    #cbind(data.frame(dels_from[queryHits(hits)]), data.frame(loops_enh_deg_gr[subjectHits(hits)])) 
+      filt_from <- !is.na(findOverlaps(dels_from, loops_enh_deg_gr, select = "arbitrary"))
+      filt_to <- !is.na(findOverlaps(dels_to, loops_enh_deg_gr, select = "arbitrary"))
+      
+      dels$ovrlp_from <- F
+      dels$ovrlp_to <- F
+      dels[filt_from, ]$ovrlp_from <- T
+      dels[filt_to, ]$ovrlp_to <- T
+      
+      # Is deletion damaging? How many damaging deletions over total?
+      dam_vec <- dels$ovrlp_from + dels$ovrlp_to
+      dels$damaging <- F
+      dels[dam_vec == 1, ]$damaging <- T
+      
+      print(paste0("Damaging deletions: ", sum(dels$damaging), " over ", length(dels$damaging), 
+                   " (", round(sum(dels$damaging) / length(dels$damaging),2)*100, "%)")) 
+      
+      message(paste0("Potentially, ", sum(dam_vec == 2), " false negatives."))
+      cat("\n") 
+    }
+      
+    ##
     
-    message(paste0("Potentially, ", sum(dam_vec == 2), " false negatives."))
-    # TODO: add handling of dam_vec == 2
-    # If one bkpt overlaps 1 loop, and the other bkpt overlaps ANOTHER loop, then it can be considered damaging as well 
-    cat("\n")
+    # Annotate SVs to loops and damaging effect 
+    dels <- SVs %>% dplyr::filter(., variant_type_simple == type)
+    dels_from <- makeGRangesFromDataFrame(dels, seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt", keep.extra.columns = T)
+    dels_to <- makeGRangesFromDataFrame(dels, seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt", keep.extra.columns = T)
+    df_from <- dels_from; df_to <- dels_to;
+    
+    hits_from <- findOverlaps(query=df_from, subject=loops_enh_deg_gr)
+    overlaps_from <- cbind(data.frame(df_from[queryHits(hits_from)]),
+                           data.frame("unique_loop_id_from" = mcols(loops_enh_deg_gr[subjectHits(hits_from)])[, "unique_loop_id"]))
+    overlaps_from <- overlaps_from %>% dplyr::rename(.,  "chr_from" = "seqnames", "chr_from_bkpt" = "start") %>% 
+      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_from, chr_from_bkpt), .before = chr_from_strand)    
+    
+    hits_to <- findOverlaps(query=dels_to, subject=loops_enh_deg_gr)
+    overlaps_to <- cbind(data.frame(dels_to[queryHits(hits_to)]),
+                         data.frame("unique_loop_id_to" = mcols(loops_enh_deg_gr[subjectHits(hits_to)])[, "unique_loop_id"]))
+    overlaps_to <- overlaps_to %>% dplyr::rename(.,  "chr_to" = "seqnames", "chr_to_bkpt" = "start") %>% 
+      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_to, chr_to_bkpt), .before = chr_to_strand)    
+    
+    # full_join joins by all columns in common (only unique_loop_id_from/to is not in common)
+    overlaps_join <- full_join(overlaps_from, overlaps_to, relationship = "many-to-many") %>% suppressMessages()
+    
+    # Only SVs overlapping: (1) one loop - NA, or (2) two different loops are damaging   
+    overlaps_join <- anno_true_damaging(df=overlaps_join, col1="unique_loop_id_from", col2="unique_loop_id_to") 
+    
+    dam_vec <- overlaps_join %>% group_by(., sv_id) %>% dplyr::summarise(., "how_many_dam" = sum(true_dam)) %>% .[,"how_many_dam"]
+    print(paste0("Damaging deletions: ", sum(dam_vec >= 1), " over ", length(unique(dels$sv_id)), 
+                 " (", round(sum(dam_vec >= 1) / length(unique(dels$sv_id)),2)*100, "%)")) 
+    cat("\n") 
   } 
   
-  else if(type == "rearrangement-translocation"){
+  else if(type == "interchromosomal-translocation"){
     trans <- SVs %>% dplyr::filter(., variant_type_simple == type)
     print(paste0("--- Annotating variants of type: ", type, " ---"))
     print(paste0("Total number of ", type, ": ", dim(trans)[1])) 
    
-    # Check whether bkpt 1 and bkpt 2 of overlap with one E - P region
-    trans_from <- makeGRangesFromDataFrame(trans[, c("chr_from", "chr_from_bkpt")], seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt")
-    trans_to <- makeGRangesFromDataFrame(trans[, c("chr_to", "chr_to_bkpt")], seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt")
-    
-    filt_from <- !is.na(findOverlaps(trans_from, loops_enh_deg_gr, select = "arbitrary")) %>% suppressWarnings()
-    filt_to <- !is.na(findOverlaps(trans_to, loops_enh_deg_gr, select = "arbitrary")) %>% suppressWarnings()
+    if(naive == T){
+      # Check whether bkpt 1 and bkpt 2 of overlap with one E - P region
+      trans_from <- makeGRangesFromDataFrame(trans[, c("chr_from", "chr_from_bkpt")], seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt")
+      trans_to <- makeGRangesFromDataFrame(trans[, c("chr_to", "chr_to_bkpt")], seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt")
       
-    trans$ovrlp_from <- F
-    trans$ovrlp_to <- F
-    trans[filt_from, ]$ovrlp_from <- T
-    trans[filt_to, ]$ovrlp_to <- T
+      filt_from <- !is.na(findOverlaps(trans_from, loops_enh_deg_gr, select = "arbitrary")) %>% suppressWarnings()
+      filt_to <- !is.na(findOverlaps(trans_to, loops_enh_deg_gr, select = "arbitrary")) %>% suppressWarnings()
+      
+      trans$ovrlp_from <- F
+      trans$ovrlp_to <- F
+      trans[filt_from, ]$ovrlp_from <- T
+      trans[filt_to, ]$ovrlp_to <- T
+      
+      # Is translocation damaging? How many damaging deletions over total?
+      dam_vec <- trans$ovrlp_from + trans$ovrlp_to
+      trans$damaging <- F
+      # Both 1 and 2 denote a damaging translocation. This becasue the two bkpts cannot fall within the same loop (different chroms)
+      # Hence if dam_vec == 2, the 2 bkpts fall within 2 different loops
+      trans[!dam_vec == 0 , ]$damaging <- T
+      
+      print(paste0("Damaging translocations: ", sum(trans$damaging), " over ", length(trans$damaging), 
+                   " (", round(sum(trans$damaging) / length(trans$damaging),2)*100, "%)")) 
+      cat("\n") 
+    }
     
-    # Is translocation damaging? How many damaging deletions over total?
-    dam_vec <- trans$ovrlp_from + trans$ovrlp_to
-    trans$damaging <- F
-    # Both 1 and 2 dneote a damaging translocation. This becasue the two bkpts cannot fall within the same loop (different chroms)
-    # Hence if dam_vec == 2, the 2 bkpts fall within 2 different loops
-    trans[!dam_vec == 0 , ]$damaging <- T
-   
-    print(paste0("Damaging translocations: ", sum(trans$damaging), " over ", length(trans$damaging), 
-                 " (", round(sum(trans$damaging) / length(trans$damaging),2)*100, "%)")) 
+    ##
     
-    # TODO: add identity of loop/enhancer affected by SV
-    # Something like this:
-    #hits <- findOverlaps(query = dels_from, subject = loops_enh_deg_gr)
-    #cbind(data.frame(dels_from[queryHits(hits)]), data.frame(loops_enh_deg_gr[subjectHits(hits)])) 
+    # Annotate SVs to loops and damaging effect 
+    trans <- SVs %>% dplyr::filter(., variant_type_simple == type)
+    trans_from <- makeGRangesFromDataFrame(trans, seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt", keep.extra.columns = T)
+    trans_to <- makeGRangesFromDataFrame(trans, seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt", keep.extra.columns = T)
+    df_from <- trans_from; df_to <- trans_to;
     
-    cat("\n") 
+    hits_from <- findOverlaps(query=df_from, subject=loops_enh_deg_gr)
+    overlaps_from <- cbind(data.frame(df_from[queryHits(hits_from)]),
+                           data.frame("unique_loop_id_from" = mcols(loops_enh_deg_gr[subjectHits(hits_from)])[, "unique_loop_id"]))
+    overlaps_from <- overlaps_from %>% dplyr::rename(.,  "chr_from" = "seqnames", "chr_from_bkpt" = "start") %>% 
+      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_from, chr_from_bkpt), .before = chr_from_strand)    
+    
+    hits_to <- findOverlaps(query=df_to, subject=loops_enh_deg_gr) %>% suppressWarnings() 
+    overlaps_to <- cbind(data.frame(df_to[queryHits(hits_to)]),
+                         data.frame("unique_loop_id_to" = mcols(loops_enh_deg_gr[subjectHits(hits_to)])[, "unique_loop_id"]))
+    overlaps_to <- overlaps_to %>% dplyr::rename(.,  "chr_to" = "seqnames", "chr_to_bkpt" = "start") %>% 
+      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_to, chr_to_bkpt), .before = chr_to_strand) 
+    
+    # full_join joins by all columns in common (only unique_loop_id_from/to is not in common)
+    overlaps_join <- full_join(overlaps_from, overlaps_to, relationship = "many-to-many") %>% suppressMessages()
+    
+    # All translocations within overlaps_join should be damaging
+    dam_vec <- is.na(overlaps_join$unique_loop_id_from) & is.na(overlaps_join$unique_loop_id_to)
+    if(sum(dam_vec) == 0){
+      print(paste0("Damaging interchromosomal-translocations: ", length(unique(overlaps_join$sv_id)), " over ", length(unique(trans$sv_id)), 
+                   " (", round( length(unique(overlaps_join$sv_id)) / length(unique(trans$sv_id)), 2)*100, "%)"))
+      cat("\n")
+    } else { message(paste0("Check ", type)) }    
   }
   
   else if(type == "inversion"){
@@ -169,7 +252,7 @@ for(type in unique(SVs$variant_type_simple)){
     hits_to <- findOverlaps(invs_to, loops_enh_deg_gr)
     overlaps_to <- cbind(data.frame(mcols(invs_to[queryHits(hits_to)])), data.frame("unique_loop_id_to" =mcols(loops_enh_deg_gr[subjectHits(hits_to)])[,"unique_loop_id"]))
     
-    overlaps_join <- full_join(overlaps_from, overlaps_to, by = "sv_id")
+    overlaps_join <- full_join(overlaps_from, overlaps_to, by = "sv_id", relationship = "many-to-many")
     
     overlaps_join$ovrlp_from.x[is.na(overlaps_join$ovrlp_from.x)] <- overlaps_join$ovrlp_from.y[is.na(overlaps_join$ovrlp_from.x)]
     overlaps_join$ovrlp_to.x[is.na(overlaps_join$ovrlp_to.x)] <- overlaps_join$ovrlp_to.y[is.na(overlaps_join$ovrlp_to.x)]
@@ -218,6 +301,5 @@ for(type in unique(SVs$variant_type_simple)){
 #' TODO: 
 #' - What about "intrachromosomal rearrangement with non-inverted orientation" ? 
 #' - Now we are considering loops connecting enhancers to DEGs promoters. Expand to enhancer - gene?
-#' - When findOverlaps() among dels and EP_regions, add also information of which enhancer is affected?
 
 
