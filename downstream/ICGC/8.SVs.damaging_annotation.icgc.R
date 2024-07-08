@@ -223,62 +223,71 @@ for(type in unique(SVs$variant_type_simple)){
     } else { message(paste0("Check ", type)) }    
   }
   
+  # FIXME: 
   else if(type == "inversion"){
     invs <- SVs %>% dplyr::filter(., variant_type_simple == type)
     print(paste0("--- Annotating variants of type: ", type, " ---"))
     print(paste0("Total number of ", type, ": ", dim(invs)[1])) 
     
     # Check whether bkpt 1 and bkpt 2 of overlap with one E - P region
-    invs_from <- makeGRangesFromDataFrame(invs[, c("chr_from", "chr_from_bkpt")], seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt")
-    invs_to <- makeGRangesFromDataFrame(invs[, c("chr_to", "chr_to_bkpt")], seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt")
-    
-    filt_from <- !is.na(findOverlaps(invs_from, loops_enh_deg_gr, select = "arbitrary")) %>% suppressWarnings()
-    filt_to <- !is.na(findOverlaps(invs_to, loops_enh_deg_gr, select = "arbitrary")) %>% suppressWarnings()
-    
-    invs$ovrlp_from <- F
-    invs$ovrlp_to <- F
-    invs[filt_from, ]$ovrlp_from <- T
-    invs[filt_to, ]$ovrlp_to <- T
-    
-    # Keeping overlapping loop information 
     # If I keep the info of which loop the SV is overlapping (unique_loop_id), I can re-connect the SVs with the loops table
     # From there, I have the coordinates of both enhancers summits (which could be extended or not) and the coordinates of genes TSSs
     invs_from <- makeGRangesFromDataFrame(invs, seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt", keep.extra.columns = T)
     invs_to <- makeGRangesFromDataFrame(invs, seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt", keep.extra.columns = T)
+    df_from <- invs_from; df_to <- invs_to;
     
     # Overlap separately from and to, keep which is the loop_id, then merge the 2 datasets keeping this info for both SVs coords 
-    hits_from <- findOverlaps(query=invs_from, subject=loops_enh_deg_gr)
-    overlaps_from <- cbind(data.frame(mcols(invs_from[queryHits(hits_from)])), data.frame("unique_loop_id_from" =mcols(loops_enh_deg_gr[subjectHits(hits_from)])[,"unique_loop_id"]))
-    hits_to <- findOverlaps(invs_to, loops_enh_deg_gr)
-    overlaps_to <- cbind(data.frame(mcols(invs_to[queryHits(hits_to)])), data.frame("unique_loop_id_to" =mcols(loops_enh_deg_gr[subjectHits(hits_to)])[,"unique_loop_id"]))
+    hits_from <- findOverlaps(query=df_from, subject=loops_enh_deg_gr)
+  
+    overlaps_from <- cbind(data.frame(df_from[queryHits(hits_from)]),
+                           data.frame("unique_loop_id_from" = mcols(loops_enh_deg_gr[subjectHits(hits_from)])[, "unique_loop_id"]))
+    overlaps_from <- overlaps_from %>% dplyr::rename(.,  "chr_from" = "seqnames", "chr_from_bkpt" = "start") %>% 
+      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_from, chr_from_bkpt), .before = chr_from_strand)    
     
-    overlaps_join <- full_join(overlaps_from, overlaps_to, by = "sv_id", relationship = "many-to-many")
+    hits_to <- findOverlaps(query=df_to, subject=loops_enh_deg_gr) %>% suppressWarnings() 
+    overlaps_to <- cbind(data.frame(df_to[queryHits(hits_to)]),
+                         data.frame("unique_loop_id_to" = mcols(loops_enh_deg_gr[subjectHits(hits_to)])[, "unique_loop_id"]))
+    overlaps_to <- overlaps_to %>% dplyr::rename(.,  "chr_to" = "seqnames", "chr_to_bkpt" = "start") %>% 
+      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_to, chr_to_bkpt), .before = chr_to_strand) 
     
-    overlaps_join$ovrlp_from.x[is.na(overlaps_join$ovrlp_from.x)] <- overlaps_join$ovrlp_from.y[is.na(overlaps_join$ovrlp_from.x)]
-    overlaps_join$ovrlp_to.x[is.na(overlaps_join$ovrlp_to.x)] <- overlaps_join$ovrlp_to.y[is.na(overlaps_join$ovrlp_to.x)]
-    overlaps_join <- overlaps_join %>% dplyr::select(., -c(ovrlp_from.y, ovrlp_to.y)) %>% 
-      rename(., c("ovrlp_from" = ovrlp_from.x, "ovrlp_to" = ovrlp_to.x)) %>% 
-      relocate(., c(ovrlp_from, ovrlp_to), .after = unique_loop_id_to)
-    # check if true - shuold be 0
-    sum(!is.na(overlaps_join[overlaps_join$ovrlp_from==F, ]$unique_loop_id_from))
-    sum(!is.na(overlaps_join[overlaps_join$ovrlp_to==F, ]$unique_loop_id_to))
+    # full_join joins by all columns in common (only unique_loop_id_from/to is not in common)
+    overlaps_join <- full_join(overlaps_from, overlaps_to, relationship = "many-to-many") %>% suppressMessages()
     
     #' @Option 1: none of from/to SV coords overlap with a loop
     #' These SVs are not present in overlaps_join, which contains only SVs-loops matches
     
     #' @Option 2: one of the two SV coords (either from or to) overlaps with a loop
-    sum(!invs$chr_from_bkpt <= invs$chr_to_bkpt) # always T
-    opt_2 <- overlaps_join %>% dplyr::filter(., ovrlp_from+ovrlp_to == 1) 
+    sum(!invs$chr_from_bkpt <= invs$chr_to_bkpt) # always T - 2nd bkpt always comes after 1st bkpt
+    opt2_vec<- (!is.na(overlaps_join$unique_loop_id_from)) + (!is.na(overlaps_join$unique_loop_id_to))
+    opt_2 <- overlaps_join %>% dplyr::filter(., 
+                                             (!is.na(unique_loop_id_from) & is.na(unique_loop_id_to)) | (is.na(unique_loop_id_from) & !is.na(unique_loop_id_to)) )
+    
+    # 1st bkpt overlaps with loop
     # Compute distances: inner bkpt_from - loop_bin2 & loop_bin2 - outer bkpt_to
- 
-    # inner_dist = bin2(point-in-the-middle) - bkpt1
-    opt_2[opt_2$ovrlp_from, ] %>% left_join(., loops_enh_deg, by = c("unique_loop_id_from" = "unique_loop_id")) %>% 
-      mutate(., "dist_inner" = ((start2+1000) - chr_from_bkpt) ) %>% View()
-    # WARNING, something wrong, alla NAs, missing chr_from_bkpt
-  
+    opt2_from <- opt_2[!is.na(opt_2$unique_loop_id_from), ] %>% 
+      left_join(., loops_enh_deg, by = c("unique_loop_id_from" = "unique_loop_id")) %>% 
+      mutate(., "inner_dist" = ( (start2+(loops_kb*1000/2)) - chr_from_bkpt) ) %>%
+      mutate(., "outer_dist" = ( chr_to_bkpt -  (start2+(loops_kb*1000/2))) ) %>%
+      mutate(., "outer_minus_inner" = outer_dist - inner_dist) %>%
+      mutate(., "damaging" = ifelse(outer_minus_inner > ((EP_end - EP_start - 2000) / 2), TRUE, FALSE))
+    
+    # Compute distances: inner bkpt_to - loop_bin1 & loop_bin1 - outer bkpt_from
+    opt2_to <- opt_2[!is.na(opt_2$unique_loop_id_to), ] %>% 
+        left_join(., loops_enh_deg, by = c("unique_loop_id_to" = "unique_loop_id")) %>%  
+        mutate(., "inner_dist" = ( (chr_to_bkpt - (start1+(loops_kb*1000/2))) ) ) %>% 
+        mutate(., "outer_dist" = ( (start1+(loops_kb*1000/2)) - chr_from_bkpt) ) %>%
+        mutate(., "outer_minus_inner" = outer_dist - inner_dist) %>%
+        mutate(., "damaging" = ifelse(outer_minus_inner > ((EP_end - EP_start - 2000) / 2), TRUE, FALSE))
+    
+    opt_2_new <- rbind(opt2_from, opt2_to)
+    
     # Ideally, we should compute the distance among bkpts and enhancers-summit and DEGs-TSSs
     # But this is complicated, because EACH loop can overlap BOTH 1 enhancer and 1 promoter 
     # Should use unbudled loops to handle this. For now, I will use the loop-bin as a reference 
+    
+    #' @Option 3: both SV coords (from and to) overlap with a loop
+    opt_3 <- overlaps_join %>% dplyr::filter(., (!is.na(unique_loop_id_from) & !is.na(unique_loop_id_to) ) ) 
+    # TODO: finish annotation for case 3 - based on whether loop1 and loop2 are the same or not (check anno_true_damaging)
     
     cat("\n")
   }
