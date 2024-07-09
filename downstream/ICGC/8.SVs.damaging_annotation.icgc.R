@@ -9,7 +9,7 @@
 
 library(tidyverse)
 library(GenomicRanges)
-#library(assertthat)
+library(assertthat)
 
 SEED <- 4321
 set.seed(SEED)
@@ -29,7 +29,11 @@ path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/dat
 
 
 # TODO: naive function. Could make it handle more cases. 
-anno_true_damaging <- function(df, col1, col2){
+anno_distinct_loops <- function(df, col1, col2){
+  if(is.string(col1) != T | is.string(col2) != T){
+    print("Params must be strings")
+  }
+
   col1_str <- df[, col1]  
   col2_str <- df[, col2]
   
@@ -41,8 +45,8 @@ anno_true_damaging <- function(df, col1, col2){
   cond1 <- (as.numeric(col2_split[, 2])) > (as.numeric(col1_split[, 3]))
   
   # If NA | TRUE = damaging. If FALSE = false_damaging
-  df$true_dam <- F
-  df$true_dam[ (is.na(cond1) | cond1 == TRUE) ] <- T
+  df$distinct_loops <- F
+  df$distinct_loops[ (is.na(cond1) | cond1 == TRUE) ] <- T
   
   return(df)
 }
@@ -153,9 +157,9 @@ for(type in unique(SVs$variant_type_simple)){
     overlaps_join <- full_join(overlaps_from, overlaps_to, relationship = "many-to-many") %>% suppressMessages()
     
     # Only SVs overlapping: (1) one loop - NA, or (2) two different loops are damaging   
-    overlaps_join <- anno_true_damaging(df=overlaps_join, col1="unique_loop_id_from", col2="unique_loop_id_to") 
+    overlaps_join <- anno_distinct_loops(df=overlaps_join, col1="unique_loop_id_from", col2="unique_loop_id_to") 
     
-    dam_vec <- overlaps_join %>% group_by(., sv_id) %>% dplyr::summarise(., "how_many_dam" = sum(true_dam)) %>% .[,"how_many_dam"]
+    dam_vec <- overlaps_join %>% group_by(., sv_id) %>% dplyr::summarise(., "how_many_dam" = sum(distinct_loops)) %>% .[,"how_many_dam"]
     print(paste0("Damaging deletions: ", sum(dam_vec >= 1), " over ", length(unique(dels$sv_id)), 
                  " (", round(sum(dam_vec >= 1) / length(unique(dels$sv_id)),2)*100, "%)")) 
     cat("\n") 
@@ -223,7 +227,6 @@ for(type in unique(SVs$variant_type_simple)){
     } else { message(paste0("Check ", type)) }    
   }
   
-  # FIXME: 
   else if(type == "inversion"){
     invs <- SVs %>% dplyr::filter(., variant_type_simple == type)
     print(paste0("--- Annotating variants of type: ", type, " ---"))
@@ -253,6 +256,10 @@ for(type in unique(SVs$variant_type_simple)){
     # full_join joins by all columns in common (only unique_loop_id_from/to is not in common)
     overlaps_join <- full_join(overlaps_from, overlaps_to, relationship = "many-to-many") %>% suppressMessages()
     
+    ##
+    
+    # Handle options 
+    
     #' @Option 1: none of from/to SV coords overlap with a loop
     #' These SVs are not present in overlaps_join, which contains only SVs-loops matches
     
@@ -269,7 +276,8 @@ for(type in unique(SVs$variant_type_simple)){
       mutate(., "inner_dist" = ( (start2+(loops_kb*1000/2)) - chr_from_bkpt) ) %>%
       mutate(., "outer_dist" = ( chr_to_bkpt -  (start2+(loops_kb*1000/2))) ) %>%
       mutate(., "outer_minus_inner" = outer_dist - inner_dist) %>%
-      mutate(., "damaging" = ifelse(outer_minus_inner > ((EP_end - EP_start - 2000) / 2), TRUE, FALSE))
+      mutate(., "damaging" = ifelse(outer_minus_inner > ((EP_end - EP_start - 2000) / 2), TRUE, FALSE)) %>% 
+      dplyr::select(., -c(seqnames1:outer_minus_inner))
     
     # Compute distances: inner bkpt_to - loop_bin1 & loop_bin1 - outer bkpt_from
     opt2_to <- opt_2[!is.na(opt_2$unique_loop_id_to), ] %>% 
@@ -277,7 +285,8 @@ for(type in unique(SVs$variant_type_simple)){
         mutate(., "inner_dist" = ( (chr_to_bkpt - (start1+(loops_kb*1000/2))) ) ) %>% 
         mutate(., "outer_dist" = ( (start1+(loops_kb*1000/2)) - chr_from_bkpt) ) %>%
         mutate(., "outer_minus_inner" = outer_dist - inner_dist) %>%
-        mutate(., "damaging" = ifelse(outer_minus_inner > ((EP_end - EP_start - 2000) / 2), TRUE, FALSE))
+        mutate(., "damaging" = ifelse(outer_minus_inner > ((EP_end - EP_start - 2000) / 2), TRUE, FALSE))%>% 
+      dplyr::select(., -c(seqnames1:outer_minus_inner))
     
     opt_2_new <- rbind(opt2_from, opt2_to)
     
@@ -287,7 +296,45 @@ for(type in unique(SVs$variant_type_simple)){
     
     #' @Option 3: both SV coords (from and to) overlap with a loop
     opt_3 <- overlaps_join %>% dplyr::filter(., (!is.na(unique_loop_id_from) & !is.na(unique_loop_id_to) ) ) 
-    # TODO: finish annotation for case 3 - based on whether loop1 and loop2 are the same or not (check anno_true_damaging)
+    opt_3 <- anno_distinct_loops(df=opt_3, col1 = "unique_loop_id_from", "unique_loop_id_to")
+    opt_3$dam_from <- F
+    opt_3$dam_to <- F
+    
+    # Check whether inversion is damaging for one of the 2 loops
+    opt_3_not <- opt_3 %>% dplyr::filter(., distinct_loops == F) 
+    opt_3_dam <- opt_3 %>% dplyr::filter(., distinct_loops == T)
+    
+    # Compute distances: inner bkpt_from - loop_bin2 & loop_bin2 - outer bkpt_to
+    opt_3_dam <- opt_3_dam %>% 
+      left_join(., loops_enh_deg, by = c("unique_loop_id_from" = "unique_loop_id")) %>% 
+      mutate(., "inner_dist" = ( (start2+(loops_kb*1000/2)) - chr_from_bkpt) ) %>%
+      mutate(., "outer_dist" = ( chr_to_bkpt -  (start2+(loops_kb*1000/2))) ) %>%
+      mutate(., "outer_minus_inner" = outer_dist - inner_dist) %>%
+      mutate(., "dam_from" = ifelse(outer_minus_inner > ((EP_end - EP_start - 2000) / 2), TRUE, FALSE)) %>%
+      dplyr::select(., -(seqnames1:outer_minus_inner))
+    # Compute distances: inner bkpt_to - loop_bin1 & loop_bin1 - outer bkpt_from
+    opt_3_dam <- opt_3_dam %>% 
+      left_join(., loops_enh_deg, by = c("unique_loop_id_to" = "unique_loop_id")) %>%  
+      mutate(., "inner_dist" = ( (chr_to_bkpt - (start1+(loops_kb*1000/2))) ) ) %>% 
+      mutate(., "outer_dist" = ( (start1+(loops_kb*1000/2)) - chr_from_bkpt) ) %>%
+      mutate(., "outer_minus_inner" = outer_dist - inner_dist) %>%
+      mutate(., "dam_to" = ifelse(outer_minus_inner > ((EP_end - EP_start - 2000) / 2), TRUE, FALSE)) %>%
+      dplyr::select(., -(seqnames1:outer_minus_inner))
+    
+    opt_3_full <- rbind(opt_3_dam, opt_3_not)
+    
+    opt_3_new <- opt_3_full
+    opt_3_new$damaging <- F
+    opt_3_new[opt_3_new$dam_from + opt_3_new$dam_to != 0, ]$damaging <- T
+    opt_3_new <- opt_3_new %>% dplyr::select(, -c(distinct_loops, dam_from, dam_to))
+     
+    ##
+    
+    # Ri-merge everything 
+    
+    overlaps_join <- rbind(opt_2_new, opt_3_new)
+    print(paste0("Damaging inversions ", length(unique(overlaps_join[overlaps_join$damaging == T,]$sv_id)), " over ", length(unique(invs$sv_id)), 
+                 " (", round( length(unique(overlaps_join[overlaps_join$damaging == T,]$sv_id)) / length(unique(invs$sv_id)), 2)*100, "%)"))
     
     cat("\n")
   }
