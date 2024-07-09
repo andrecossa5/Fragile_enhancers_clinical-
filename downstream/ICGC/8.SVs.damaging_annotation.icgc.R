@@ -1,11 +1,12 @@
 
 #'Annotate SVs as damaging or non-damaging
 #'
-#'
 #'@Deletion is damaging if 1 bkpt falls within E - P region and the other one falls outside. 
 #'Deletions in which both bpts fall within E - P region bring enhancer and promoter closer.
 #'@Interchromosomal-translocation is damaging if 1 bkpt falls within E - P region and the other one falls outside.
 #'two bkpts of the same SV cannot fall within the same loops, because they fall in different chromosomes.
+#'@Inversion is damaging is 1 1 bkpt falls within E - P region and the other one falls outside
+#'and the distance 'outer' bkpt - bin is (1) greater than the distance bin - 'inner' bkpt, (2) greater than distance (E-P) / 2 
 
 library(tidyverse)
 library(GenomicRanges)
@@ -27,8 +28,7 @@ path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/dat
 
 ##
 
-
-# TODO: naive function. Could make it handle more cases. 
+# TODO @OPTIMIZE: naive function. Could make it handle more cases. 
 anno_distinct_loops <- function(df, col1, col2){
   if(is.string(col1) != T | is.string(col2) != T){
     print("Params must be strings")
@@ -186,7 +186,7 @@ for(type in unique(SVs$variant_type_simple)){
       # Is translocation damaging? How many damaging deletions over total?
       dam_vec <- trans$ovrlp_from + trans$ovrlp_to
       trans$damaging <- F
-      # Both 1 and 2 denote a damaging translocation. This becasue the two bkpts cannot fall within the same loop (different chroms)
+      # Both 1 and 2 denote a damaging translocation. This because the two bkpts cannot fall within the same loop (different chroms)
       # Hence if dam_vec == 2, the 2 bkpts fall within 2 different loops
       trans[!dam_vec == 0 , ]$damaging <- T
       
@@ -233,8 +233,6 @@ for(type in unique(SVs$variant_type_simple)){
     print(paste0("Total number of ", type, ": ", dim(invs)[1])) 
     
     # Check whether bkpt 1 and bkpt 2 of overlap with one E - P region
-    # If I keep the info of which loop the SV is overlapping (unique_loop_id), I can re-connect the SVs with the loops table
-    # From there, I have the coordinates of both enhancers summits (which could be extended or not) and the coordinates of genes TSSs
     invs_from <- makeGRangesFromDataFrame(invs, seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt", keep.extra.columns = T)
     invs_to <- makeGRangesFromDataFrame(invs, seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt", keep.extra.columns = T)
     df_from <- invs_from; df_to <- invs_to;
@@ -290,10 +288,6 @@ for(type in unique(SVs$variant_type_simple)){
     
     opt_2_new <- rbind(opt2_from, opt2_to)
     
-    # Ideally, we should compute the distance among bkpts and enhancers-summit and DEGs-TSSs
-    # But this is complicated, because EACH loop can overlap BOTH 1 enhancer and 1 promoter 
-    # Should use unbudled loops to handle this. For now, I will use the loop-bin as a reference 
-    
     #' @Option 3: both SV coords (from and to) overlap with a loop
     opt_3 <- overlaps_join %>% dplyr::filter(., (!is.na(unique_loop_id_from) & !is.na(unique_loop_id_to) ) ) 
     opt_3 <- anno_distinct_loops(df=opt_3, col1 = "unique_loop_id_from", "unique_loop_id_to")
@@ -345,17 +339,35 @@ for(type in unique(SVs$variant_type_simple)){
 ##
 
 
-# TODO: implement?
-# Defining E - P regions - by considering where enhancer falls within bin 
-#loops$enh1 <- str_split(loops$name1, ":", simplify = T)[,2] 
-#loops <- loops%>% relocate(., enh1, .before = name1)
-#enh1_pos <- as.numeric(loops$enh1[1:5]) - loops$start1[1:5]
-#if(enh1_pos >= 0 | enh1_pos <= loops_kb*1000) --> enh within bin 1
-#if(enh1_pos < 0) --> enh within bin -1
-#if(enh1_pos > loops_kb*1000) --> enh within bin +1
+#' @NOTES: 
+#' 
+#' @E-Pregions overlapping with SVs: how do we define them? 
+#' For now, E-P region goes from the beginning of bin1 (start1) and the end of bin2 (end2).
+#' However, enhancers and promoters were annotated to loops by considering +/- 1 bin. 
+#' So maybe we should either 
+#' - (1) extend E-P region to (start1 - 2kb) - (end2 + 2kb) or
+#' - (2) define E-P regions by considering where the enhancer/promoter falls within the bin  
+#' 
+#' @Neglected-SVs: some SVs types were overlooked, namely:
+#' "intrachromosomal rearrangement with inverted orientation", "intrachromosomal rearrangement with non-inverted orientation", "tandem duplication"
+#' Should understand what the first 2 are and eventually include them.
+#' 
+#' @Inversions are annotated based on 'outer' and 'inner' distances between SVs bkpts and the _middle_ point of bin1 or bin2  
+#' Ideally, we should compute the distance among bkpts and enhancers-summit and DEGs-TSSs
+#' But this is complicated, because EACH loop can overlap BOTH 1 enhancer and 1 promoter 
+#' Should use unbudled loops to handle this. In any case, the number of damagin mutations is pretty low.
+#' 
+#' @Outside, definition: 
+#' For both deletions and inversions, we consider as damaging those SVs with a 1st bkpts 'inside' a loop and a 2nd 'outside'.
+#' 'outside' can be a non-annotated genomic region, the same loop as the 1st bkpt, or _another loop_.
+#' In the last scenario, the SV could still be damaging, depending on cases. 
+#' For now, the SV is still damagin if 2nd bkpt falls in a _distinct_ loop (with bin1 and bin2 outside of the first E-P region)
+#' There are other complex situations, such as when one bin falls within the first E-P region, and the other does not. 
+#' These are not handled yet.  
+#' 
+#' @Annotation:
+#' Now we are considering loops connecting enhancers to DEGs promoters. Expand to enhancer - any gene?
 
-#' TODO: 
-#' - What about "intrachromosomal rearrangement with non-inverted orientation" ? 
-#' - Now we are considering loops connecting enhancers to DEGs promoters. Expand to enhancer - gene?
+
 
 
