@@ -26,7 +26,8 @@ nextflow run nf-core/chipseq -r 2.0.0 \
     --macs_gsize 2864785220 \
     --narrow_peak \
     -profile singularity \
-    -with-tower
+    -with-tower \
+    -resume
 
 # blacklisted regions for the specified genome are bundled with the pipeline 
 
