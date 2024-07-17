@@ -5,7 +5,7 @@
 #' 3 "damaging" levels for mutations are defined: 
 #' - 1 = SNV falls within motif;
 #' - 2 = SNV falls outside motif, within a +/- 10 bp window around motif;
-#' - 3 = SNV falls outside window around motif but within +/- WIN from peak summit.
+#' - 3 = not damaging - SNV falls outside window around motif but within +/- WIN from peak summit.
 #' 
 
 
@@ -15,11 +15,9 @@
 library(tidyverse)
 library(TFBSTools)
 library(BSgenome)
-#BiocManager::install("JASPAR2020")
 library(JASPAR2020)
 library(GenomicRanges)
 library(VariantAnnotation)
-#BiocManager::install(BSgenome.Hsapiens.UCSC.hg19)
 library(BSgenome.Hsapiens.UCSC.hg19)
 
 SEED <- 4321
@@ -28,7 +26,8 @@ set.seed(SEED)
 WIN <- 1000
 MARKERS <- c("CtIP", "GRHL")
 motif_thresh <- 40 # score is typically expressed as a percentage of the maximum possible score for a match to the PWM. 
-dir <- "hpc" # "local" or "hpc"
+dir <- "local" # "local" or "hpc"
+save_anno <- F
   
 if(dir == "hpc"){
   path_enh_SSMs <- list("CtIP" = fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/enhancers_SSMs_overlaps/data/Table_enh_SSMs_CtIP.all_overlaps.", WIN, "bp_WIN.tsv")), 
@@ -64,7 +63,7 @@ for(marker in MARKERS){
 ##
 
 
-## Motif scanning
+## Motif scanning across enhancer regions 
 
 # GRHL2 motif has a length of 12 bp, but matchPWM looks for complete matches (of the whole sequence)
 pwm <- toPWM(pfm[[1]])
@@ -126,8 +125,61 @@ for(marker in MARKERS){
 ##
 
 
+## FIMO could also be used for motif matching 
+# Web tool: https://meme-suite.org/meme/tools/fimo 
+# Prepare input for the tool
+
+# Input fasta files 
+seqs_ctip <- getSeq(BSgenome.Hsapiens.UCSC.hg19, enh_gr[["CtIP"]])
+names(seqs_ctip) <- paste0("sequence", seq_along(seqs_ctip))
+seqs_names_conv_ctip <- data.frame("seq_name" = names(seqs_ctip), 
+                                   "name" = mcols(enh_gr$CtIP)$name)
+
+seqs_grhl <- getSeq(BSgenome.Hsapiens.UCSC.hg19, enh_gr[["GRHL"]])
+names(seqs_grhl) <- paste0("sequence", seq_along(seqs_grhl))
+seqs_names_conv_grhl <- data.frame("seq_name" = names(seqs_grhl), 
+                                   "name" = mcols(enh_gr$GRHL)$name)
+
+#writeXStringSet(seqs_ctip, filepath = fs::path(path_results, "CtIP_enhancer_regions.WIN_1000.fasta"))
+#writeXStringSet(seqs_grhl, filepath = fs::path(path_results, "GRHL_enhancer_regions.WIN_1000.fasta"))
+
+# Motif in MEME format is also needed
+# This can be downloaded from: https://jaspar2020.genereg.net/matrix/MA1105.2/ 
+
+# Read FIMO results - table contains duplicated sequences 
+seqs_names_conv <- list("CtIP" = seqs_names_conv_ctip, "GRHL" = seqs_names_conv_grhl)
+for(marker in MARKERS[2]){
+  fimo_results <- read_tsv(fs::path(path_results, paste0("FIMO_Results_info_files.", marker, "_enhancers/fimo.tsv")), comment = "#") %>% suppressMessages()
+  fimo_results <- fimo_results[!duplicated(fimo_results),] %>% 
+    left_join(., seqs_names_conv[[marker]], by = c("sequence_name" = "seq_name")) %>%
+    dplyr::select(., -sequence_name) %>%
+    dplyr::filter(., !duplicated(.))
+  
+  sum(!fimo_results$`p-value` < 0.01) # Only significant matches are returned - in terms of p-value
+  sum(fimo_results$`q-value` < 0.05) # However, no significant q-value
+  
+  # Print some info
+  n_enh_tot <- length(unique(enh_SSMs[[marker]]$name))
+  n_enh_motif <- length(unique(fimo_results$name))
+  cat("\n")
+  print("--- Motif scanning results from FIMO ---")
+  print(paste0("Fraction of ", marker, " enhancers with a GRHL2 motif within: ", n_enh_motif, " / ", n_enh_tot, " - ~", 
+               round(n_enh_motif / n_enh_tot * 100), "%"))
+}
+
+
+
+
+
+
+
+##
+
+
+## Annotation of SNVs to damaging levels according to variant position 
+
 enh_SSMs_anno <- list()
-# Annotate SSMs
+
 for(marker in MARKERS){
   # Prepare SSMs to annotate
   df_enh_var <- enh_SSMs[[marker]]
@@ -162,11 +214,19 @@ for(marker in MARKERS){
   df_enh_var[ (hits2 & !hits1), ]$damaging <- 2
   enh_SSMs_anno[[marker]] <- df_enh_var
   
-  # Save annotated 
+  # Print some info
+  cat("\n")
+  print(paste0("Total number of variants for ", marker, " enhancers - WIN = ", WIN, ": ", 
+               dim(enh_SSMs_anno[[marker]])[1]))
+  t <- table(enh_SSMs_anno[[marker]]$damaging) / sum(table(enh_SSMs_anno[[marker]]$damaging)) * 100
+  print("Proportion of damaging vs. non-damaging: ")
+  print(paste0( "Damaging level - ", names(t), ": ", round(t, 2), "%" ))
   
-  enh_SSMs_anno[[marker]] %>% 
-    write_tsv(., fs::path(path_results, paste0("Table_enh_SSMs_", marker, ".all_overlaps.", WIN, "bp_WIN.with_damaging_anno.motif_thresh_", motif_thresh, ".tsv")))
-
+  # Save annotated 
+  if(save_anno == T){
+    enh_SSMs_anno[[marker]] %>% 
+      write_tsv(., fs::path(path_results, paste0("Table_enh_SSMs_", marker, ".all_overlaps.", WIN, "bp_WIN.with_damaging_anno.motif_thresh_", motif_thresh, ".tsv")))
+  }
 }
 
 
