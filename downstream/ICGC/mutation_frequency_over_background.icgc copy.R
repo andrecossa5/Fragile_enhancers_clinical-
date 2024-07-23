@@ -1,6 +1,7 @@
 
 library(tidyverse)
 library(GenomicRanges)
+#install.packages("/Users/ieo6983/Downloads/rowr_1.0.1.tar.gz", repos = NULL, type="source")
 library(rowr)
 library(ggpubr)
 
@@ -8,7 +9,6 @@ SEED <- 4321
 set.seed(SEED)
 
 source("/Users/ieo6983/Desktop/fragile_enhancer_clinical/utils/functions_genomics.R")
-
 path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/others/")
 path_SSMs <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/pre_processed_ICGC/simple_somatic_mutation.open.matching_calls.with_AFs.tsv")
 path_chrom_sizes <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/hg19.chrom.txt")
