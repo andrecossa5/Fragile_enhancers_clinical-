@@ -247,5 +247,166 @@ str_c(str_c(snvs_coords_grhl$seqnames_sbj, snvs_coords_grhl$start_sbj, sep = ":"
 
 
 
+##
+
+
+## STSMs
+
+# Position of Start/End bkpts within regions
+df_var_stats_all <- list("CtIP" = NA, "GRHL" = NA)
+
+
+for(marker in names(enh_all)){
+  
+  ### Pre/process input data
+  marker_enh <- enh_all[[marker]] 
+  
+  ### Extend regions of 'WIN' from summit
+  marker_enh$start <- marker_enh$summit - WIN
+  marker_enh$end <- marker_enh$summit + WIN
+  
+  enh_gr <- makeGRangesFromDataFrame(marker_enh, keep.extra.columns = T)
+  
+  
+  ### Find SNVs / Enhancers overlaps 
+  hits_obj_enh <- findOverlaps(query=enh_gr, subject=STSMs_gr)
+  STSMs_sbj <- data.frame(STSMs_gr[subjectHits(hits_obj_enh)])
+  colnames(STSMs_sbj)[1:5] <- paste(colnames(STSMs_sbj)[1:5], "sbj", sep = "_")
+  enh_SSMs <- cbind(data.frame(enh_gr[queryHits(hits_obj_enh)]), STSMs_sbj) 
+  
+  # By enhancer
+  df_var_stats <- data.frame(name = unique(enh_SSMs$name), 
+                             n_bkpts = NA, 
+                             n_single_bkpts = NA,
+                             n_within_stsms = NA)
+  
+  for(i in 1:length(unique(enh_SSMs$name))){
+    # Variants overlapping each enhancer - ACROSS DONORS
+    enh <- unique(enh_SSMs$name)[i]
+    SSMs_sub <- enh_SSMs[enh_SSMs$name == enh, ]
+    
+    df_var_stats[df_var_stats$name == enh, "n_bkpts"] <- dim(SSMs_sub)[1]
+    
+    # For each enhancer, are there SVs with 2 bkpts within the enhancer?
+    n_unique_vars <- table(SSMs_sub$sv_id)
+    
+    # For each var, only 1 instance. Only start or end bkpt falls within enhancer
+    if(any(n_unique_vars > 1) == F){
+      df_var_stats[df_var_stats$name == enh, "n_single_bkpts"] <- dim(SSMs_sub)[1]
+      df_var_stats[df_var_stats$name == enh, "n_within_stsms"] <- 0
+    } else if(any(n_unique_vars > 1) == T){
+      df_var_stats[df_var_stats$name == enh, "n_single_bkpts"] <- sum(n_unique_vars == 1)
+      
+      n_single <- 0
+      n_within <- 0
+      
+      # Which stsms have more than 1 bkpt
+      SSMs_sub <- SSMs_sub %>% filter(sv_id %in% names(n_unique_vars[n_unique_vars > 1]))
+      non_unique_vars <- unique(SSMs_sub$sv_id)
+      for(i in 1:length(non_unique_vars)){
+        one_var_df <- SSMs_sub[SSMs_sub$sv_id == non_unique_vars[i], ]
+        # How many unique sv_id_x_class (from/to) x icgc_donor_id 
+        df_stat <- one_var_df %>% group_by(icgc_donor_id) %>% summarise(n_sv_id_x_class = length(unique(sv_id_x_class)))
+        n_within <- n_within + sum(df_stat$n_sv_id_x_class == 2)
+        n_single <- n_single + sum(df_stat$n_sv_id_x_class == 1)
+      }
+      
+      df_var_stats[df_var_stats$name == enh, "n_within_stsms"] <- n_within
+      df_var_stats[df_var_stats$name == enh, "n_single_bkpts"] <- df_var_stats[df_var_stats$name == enh, "n_single_bkpts"]+n_single
+    }
+  }
+  
+  df_var_stats_all[[marker]] <- df_var_stats
+}
+
+
+for(marker in names(enh_all)){
+  var_stats_marker <- df_var_stats_all[[marker]]
+  print(apply(var_stats_marker[,-1], MARGIN = 2, FUN = sum))
+  
+  print(sprintf("Percentage of single bkpts: %.0f%%", 
+                apply(var_stats_marker[,-1], MARGIN = 2, FUN = sum)[2] / apply(var_stats_marker[,-1], MARGIN = 2, FUN = sum)[1]*100))
+  print(sprintf("Percentage of within bkpts: %.0f%%", 
+                apply(var_stats_marker[,-1], MARGIN = 2, FUN = sum)[3] / apply(var_stats_marker[,-1], MARGIN = 2, FUN = sum)[1]*100))
+}
+
+aa <- left_join(var_stats_marker[var_stats_marker$n_within_stsms != 0, ], enh_SSMs[, c("name", "cluster")], by = "name")
+aa <- aa[!duplicated(aa), ]
+table(aa$cluster)
+
+
+
+# Deletions spanning the full enhancer
+deletions <- STSMs %>% filter(variant_type == "deletion")
+length(unique(deletions$sv_id))
+dim(deletions)[1]
+
+deletions_from <- deletions %>% filter(class == "from") %>%
+  select(-c(chrom_bkpt, end, range, class))
+deletions_to <- deletions %>% filter(class == "to") %>%
+  select(sv_id, start)
+deletions_coords <- left_join(deletions_from, deletions_to, by = "sv_id")
+colnames(deletions_coords)[12:13] <- c("start", "end")
+
+# Length of deletions
+data.frame(x = deletions_coords$end - deletions_coords$start) %>%
+  ggplot(., aes(x = x))+
+  geom_histogram()+
+  scale_x_continuous(limits = c(0, 5.0e+07))
+summary(deletions_coords$end - deletions_coords$start)
+
+deletions_gr <- makeGRangesFromDataFrame(deletions_coords, keep.extra.columns = T)
+
+
+for(marker in names(enh_all)){
+  marker_enh <- enh_all[[marker]] 
+  marker_enh$start <- marker_enh$summit - WIN
+  marker_enh$end <- marker_enh$summit + WIN
+  
+  enh_gr <- makeGRangesFromDataFrame(marker_enh, keep.extra.columns = T)
+  
+  # if type is within, the query interval must be wholly contained within the subject interval. 
+  hits_obj <- findOverlaps(query = enh_gr, subject = deletions_gr, 
+                           type = "within", minoverlap = 1)
+  del_sbj <- data.frame(deletions_gr[subjectHits(hits_obj)])
+  colnames(del_sbj)[1:5] <- paste(colnames(del_sbj)[1:5], "sbj", sep = "_")
+  enh_dels <- cbind(data.frame(enh_gr[queryHits(hits_obj)]), del_sbj) 
+  
+  sum(enh_dels$end_sbj - enh_dels$end < 0) # should be 0 - STSM end always after enhancer end
+  sum(enh_dels$start_sbj - enh_dels$start > 0) # should be 0 - STSM start always before enhancer start
+  
+  cat("\n")
+  print(marker)
+  print(sprintf("Number of deletions spanning a full enhancer: %.0f - %.1f%%", length(unique(enh_dels$sv_id)), 
+                length(unique(enh_dels$sv_id))/dim(deletions_coords)[1]*100))  
+  print(sprintf("Number of enhancers fully deleted: %.0f - %.1f%%", length(unique(enh_dels$name)), 
+                length(unique(enh_dels$name))/dim(marker_enh)[1]*100))
+  print(sprintf("Number of donors hit: %.0f",length(unique(enh_dels$icgc_donor_id))))
+  
+  # Number of enhancers removed by each deletion
+  n_del_enh <- enh_dels %>% group_by(sv_id) %>% 
+    dplyr::summarise(n_enh_deleted = length(unique(name))) %>%
+    arrange(-n_enh_deleted)
+  
+  print("Number of enhancers removed by each deletion:")
+  print(summary(n_del_enh$n_enh_deleted))
+  print("Number of deletions removing only one enhancer:")
+  print(dim(n_del_enh[n_del_enh$n_enh_deleted == 1, ])[1])
+  
+  
+  # Number of donors harboring an 'enhancer-specific' deletion
+  enh_spec_del <- n_del_enh[n_del_enh$n_enh_deleted == 1, ]$sv_id
+  n_enh_spec_dels <- enh_dels %>% filter(sv_id %in% enh_spec_del) %>% 
+    group_by(icgc_donor_id) %>% 
+    dplyr::summarise(n_enh_spec_dels = length(unique(sv_id)))
+  n_enh_spec_dels <- rbind(n_enh_spec_dels,
+                           data.frame("icgc_donor_id" = unique(STSMs$icgc_donor_id[!STSMs$icgc_donor_id %in% n_enh_spec_dels$icgc_donor_id]),
+                                      "n_enh_spec_dels" = 0))
+  
+  print("Number of 'enhancer-specific' dels x donor:")
+  print(summary(n_enh_spec_dels$n_enh_spec_dels))
+  
+}
+
 
 
