@@ -9,8 +9,8 @@ set.seed(SEED)
 source("/Users/ieo6983/Desktop/fragile_enhancer_clinical/utils/functions_genomics.R")
 
 path_SSMs <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/pre_processed_ICGC/simple_somatic_mutation.open.matching_calls.with_AFs.tsv")
-path_enhancers_ctip <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/peaks_union/merged_peaks.hg19_CtIP.filtered_K27ac_k4me1_k4me3.hq_signal.new_summit.narrowPeak")
-path_enhancers_grhl <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/peaks_union/merged_peaks.hg19_GRHL.filtered_K27ac_k4me1_k4me3.hq_signal.new_summit.narrowPeak")
+path_enhancers_ctip <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/CtIP_enh.hq_signal.clustered.tsv")
+path_enhancers_grhl <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/GRHL_enh.hq_signal.clustered.tsv")
 
 path_results_data <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/NEW/enhancers_SSMs_overlaps/data/")
 path_results_plots <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/NEW/enhancers_SSMs_overlaps/plots/")
@@ -29,12 +29,8 @@ save_table_overlaps <- F
 ## Load input files 
 SSMs <- read_tsv(path_SSMs)
 
-narrowPeak_colnames_nostrand <- c("chrom", "start", "end", "name", "score", 
-                                  "signal_value", "metric1", "metric2", "summit")
-enh_ctip <- read_tsv(path_enhancers_ctip, col_names = narrowPeak_colnames_nostrand) %>%
-  dplyr::select(., c(chrom, start, end, name, summit))
-enh_grhl <- read_tsv(path_enhancers_grhl, col_names = narrowPeak_colnames_nostrand) %>%
-  dplyr::select(., c(chrom, start, end, name, summit))
+enh_ctip <- read_tsv(path_enhancers_ctip) 
+enh_grhl <- read_tsv(path_enhancers_grhl)
 enh_all <- list("CtIP" = enh_ctip, "GRHL" = enh_grhl)
 
 
