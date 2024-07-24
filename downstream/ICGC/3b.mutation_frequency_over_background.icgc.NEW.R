@@ -9,19 +9,33 @@ SEED <- 4321
 set.seed(SEED)
 
 source("/Users/ieo6983/Desktop/fragile_enhancer_clinical/utils/functions_genomics.R")
-path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/others/")
+
+path_enhancers_ctip <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/CtIP_enh.hq_signal.clustered.tsv")
+path_enhancers_grhl <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/GRHL_enh.hq_signal.clustered.tsv")
+
 path_SSMs <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/pre_processed_ICGC/simple_somatic_mutation.open.matching_calls.with_AFs.tsv")
 path_chrom_sizes <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/hg19.chrom.txt")
-#path_output_temp <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/temp/")
-path_output_temp <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/temp/")
+
+path_output_temp <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/NEW/temp/")
 
 
 MARKERS <- c("CtIP", "GRHL")
-WIN <- 50
+WIN <- 100
 Mb <- 1000000
 
 high_low <- T
+save_temp <- F
 
+
+##
+
+# Clusters are the same for CtIP and GRHL
+clust_high_ctip <- c("cluster_1", "cluster_2", "cluster_3", "cluster_4")
+clust_low_ctip <- c("cluster_5")
+
+clust_high <- list("CtIP" = clust_high_ctip, "GRHL" = clust_high_ctip)
+clust_low <- list("CtIP" = clust_low_ctip, "GRHL" = clust_low_ctip)
+clust_all <- list("high" = clust_high, "low" = clust_low)
 
 ##
 
@@ -29,30 +43,25 @@ high_low <- T
 # Define groups of clusters
 cluster_groups <- setNames(vector(mode="list", length=length(MARKERS)), MARKERS)
 cluster_groups$CtIP <- list(
-  "high" = c("CtIP_cluster_2_Enh", "CtIP_cluster_3_Enh", "CtIP_cluster_5_Enh"), 
-  "low" = c("CtIP_cluster_6.2_Enh", "CtIP_cluster_6.3_Enh", "CtIP_cluster_6.1_Enh", "CtIP_cluster_6.0")
+  "high" = c("cluster_1", "cluster_2", "cluster_3", "cluster_4"), 
+  "low" = c("cluster_5")
 )
-cluster_groups$GRHL <- list(
-  "high" = c("GRHL_cluster_1_Enh", "GRHL_cluster_2_Enh", "GRHL_cluster_4_Enh"), 
-  "low" = c("GRHL_cluster_5.2_Enh", "GRHL_cluster_5.3_Enh", "GRHL_cluster_5.1_Enh", "GRHL_cluster_5.0")
-)
+cluster_groups$GRHL <- cluster_groups$CtIP
 
 # Read enhancers 
-columns_names <- c("chrom", "start", "end", "cluster")
-enh_all <- list("CtIP" = read_tsv(fs::path(path_enhancers, "Cluster_CtIP_Enh_All.txt"), col_names = columns_names, comment = "#"), 
-                "GRHL" = read_tsv(fs::path(path_enhancers, "Cluster_GRHL_Enh_All.txt"), col_names = columns_names, comment = "#"))
+enh_ctip <- read_tsv(path_enhancers_ctip) 
+enh_grhl <- read_tsv(path_enhancers_grhl) 
+enh_all <- list("CtIP" = enh_ctip, "GRHL" = enh_grhl)
+
 # add summit & name
 enh_all <- lapply(enh_all, function(df){
-  df$summit <- df$end
+  df$chrom <- paste0("chr", df$chrom)
   df$name <- str_c(df$chrom, df$summit, sep=":")
   return(df)})
 # Add high-low cluster info
-enh_all <- lapply(names(enh_all), function(name){
-  of_int <- cluster_groups[[name]][["high"]]
-  enh_all[[name]] <- enh_all[[name]] %>% mutate(., group = ifelse(cluster %in% of_int, "high", "low"))
-  return(enh_all[[name]])
-})
-names(enh_all) <- MARKERS
+for(marker in MARKERS){
+  enh_all[[marker]]$group <- ifelse(enh_all[[marker]]$cluster %in% clust_all$high[[marker]], "high", "low")
+}
 
 
 # Read variants
@@ -324,14 +333,12 @@ for(marker in MARKERS){
 ##
 
 
-# Save ICGC objects temporarily  
-saveRDS(fc_all_samples_markers, file = fs::path(path_output_temp, "fc_dist.all_enhancers.icgc.rds"))
-saveRDS(fc_ran_all_samples_markers, file = fs::path(path_output_temp, "fc_dist.all_random.icgc.rds"))
-saveRDS(fc_x_group_all_samples_markers, file = fs::path(path_output_temp, "fc_dist.grouped_enhancers.icgc.rds"))
-
-fc_all_samples_markers <- readRDS(file = fs::path(path_output_temp, "fc_dist.all_enhancers.icgc.rds"))
-fc_ran_all_samples_markers <- readRDS(file = fs::path(path_output_temp, "fc_dist.all_random.icgc.rds"))
-fc_x_group_all_samples_markers <- readRDS(file = fs::path(path_output_temp, "fc_dist.grouped_enhancers.icgc.rds"))
+if(save_temp == T){
+  # Save ICGC objects temporarily  
+  saveRDS(fc_all_samples_markers, file = fs::path(path_output_temp, "fc_dist.all_enhancers.icgc.rds"))
+  saveRDS(fc_ran_all_samples_markers, file = fs::path(path_output_temp, "fc_dist.all_random.icgc.rds"))
+  saveRDS(fc_x_group_all_samples_markers, file = fs::path(path_output_temp, "fc_dist.grouped_enhancers.icgc.rds"))
+}
 
 
 ##
