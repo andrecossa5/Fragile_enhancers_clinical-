@@ -20,12 +20,14 @@ marker <- "GRHL"
 WIN <- 3000 # enhancers window that was used to compute overlap with SVs
 loops_kb <- 2
 naive <- F
+save_SVs_anno <- F
 
 path_SVs <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/raw_ICGC/structural_somatic_mutation.tsv")
 path_loops <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/OLD/", loops_kb, "kb/data/2kb_Unified_table.SCR_plus_KD_counts.all_anno_loops.ENH_DEGs_any.tsv"))
 path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/others/Cluster_GRHL_Enh_All.txt")
-  
+path_results_data <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/OLD/damaging_variants_annotation/SVs/")  
 
+                              
 ##
 
 # TODO @OPTIMIZE: naive function. Could make it handle more cases. 
@@ -63,7 +65,7 @@ enh$summit <- enh$end
 enh$name <- str_c(enh$chrom, enh$summit, sep=":")
 
 print("Types of structural variants:")
-print(table(SVs$variant_type))
+print(table(SVs_full$variant_type))
 # Types are: 
 # "deletion", "inversion", "interchromosomal rearrangement - unknown type"
 # "intrachromosomal rearrangement with inverted orientation", "intrachromosomal rearrangement with non-inverted orientation"
@@ -96,6 +98,7 @@ loops_enh_deg_gr <- loops_enh_deg %>% makeGRangesFromDataFrame(., keep.extra.col
 print("All types: ") 
 print(unique(SVs$variant_type_simple))
 
+SVs_annotated <- data.frame()
 for(type in unique(SVs$variant_type_simple)){
   
   # tandem duplication - not considered
@@ -159,10 +162,19 @@ for(type in unique(SVs$variant_type_simple)){
     # Only SVs overlapping: (1) one loop - NA, or (2) two different loops are damaging   
     overlaps_join <- anno_distinct_loops(df=overlaps_join, col1="unique_loop_id_from", col2="unique_loop_id_to") 
     
+    # For each deletion, compute in how many cases it was damaging 
     dam_vec <- overlaps_join %>% group_by(., sv_id) %>% dplyr::summarise(., "how_many_dam" = sum(distinct_loops)) %>% .[,"how_many_dam"]
     print(paste0("Damaging deletions: ", sum(dam_vec >= 1), " over ", length(unique(dels$sv_id)), 
                  " (", round(sum(dam_vec >= 1) / length(unique(dels$sv_id)),2)*100, "%)")) 
     cat("\n") 
+    
+    # For which loop is SV damaging? (from or to)
+    overlaps_join$dam_from <- ( !is.na(overlaps_join$unique_loop_id_from) ) & ( overlaps_join$distinct_loops == T)
+    overlaps_join$dam_to <- ( !is.na(overlaps_join$unique_loop_id_to) ) & ( overlaps_join$distinct_loops == T)
+    overlaps_join <- overlaps_join %>% rename(., "distinct_loops" = "damaging")
+
+    # Save annotated SVs
+    SVs_annotated <- rbind(SVs_annotated, overlaps_join)
   } 
   
   else if(type == "interchromosomal-translocation"){
@@ -224,6 +236,14 @@ for(type in unique(SVs$variant_type_simple)){
       print(paste0("Damaging interchromosomal-translocations: ", length(unique(overlaps_join$sv_id)), " over ", length(unique(trans$sv_id)), 
                    " (", round( length(unique(overlaps_join$sv_id)) / length(unique(trans$sv_id)), 2)*100, "%)"))
       cat("\n")
+      
+      overlaps_join$damaging <- TRUE
+      # For which loop is the SV damaging? (from or to)
+      overlaps_join$dam_from <- !is.na(overlaps_join$unique_loop_id_from)
+      overlaps_join$dam_to <- !is.na(overlaps_join$unique_loop_id_to)
+  
+      # Save annotated SVs 
+      SVs_annotated <- rbind(SVs_annotated, overlaps_join)
     } else { message(paste0("Check ", type)) }    
   }
   
@@ -287,6 +307,8 @@ for(type in unique(SVs$variant_type_simple)){
       dplyr::select(., -c(seqnames1:outer_minus_inner))
     
     opt_2_new <- rbind(opt2_from, opt2_to)
+    opt_2_new$dam_from <- ( !is.na(opt_2_new$unique_loop_id_from) & (opt_2_new$damaging == T) )
+    opt_2_new$dam_to <- ( !is.na(opt_2_new$unique_loop_id_to) & (opt_2_new$damaging == T) )
     
     #' @Option 3: both SV coords (from and to) overlap with a loop
     opt_3 <- overlaps_join %>% dplyr::filter(., (!is.na(unique_loop_id_from) & !is.na(unique_loop_id_to) ) ) 
@@ -320,19 +342,36 @@ for(type in unique(SVs$variant_type_simple)){
     opt_3_new <- opt_3_full
     opt_3_new$damaging <- F
     opt_3_new[opt_3_new$dam_from + opt_3_new$dam_to != 0, ]$damaging <- T
-    opt_3_new <- opt_3_new %>% dplyr::select(, -c(distinct_loops, dam_from, dam_to))
-     
+    # Keep info: for which loop is the SV damaging? (from or to)
+    opt_3_new <- opt_3_new %>% dplyr::select(, -c(distinct_loops)) 
+      
     ##
     
     # Ri-merge everything 
     
-    overlaps_join <- rbind(opt_2_new, opt_3_new)
+    overlaps_join <- rbind(opt_2_new, opt_3_new) %>% 
+      relocate(., damaging, .before = dam_from)
     print(paste0("Damaging inversions ", length(unique(overlaps_join[overlaps_join$damaging == T,]$sv_id)), " over ", length(unique(invs$sv_id)), 
                  " (", round( length(unique(overlaps_join[overlaps_join$damaging == T,]$sv_id)) / length(unique(invs$sv_id)), 2)*100, "%)"))
-    
     cat("\n")
+    
+    # Save annotated SVs
+    SVs_annotated <- rbind(SVs_annotated, overlaps_join)
   }
     
+}
+
+
+##
+
+
+## Save output 
+
+# SVs_annotated contains all SVs that overlapped with an E - P region, classified either as 'damaging' or 'non-damaging' 
+# If damaging = TRUE, SV is damaging for both loops indicated (unique_loop_id_from and unique_loop_id_to)
+
+if(save_SVs_anno == T){
+  write_tsv(SVs_annotated, file = fs::path(path_results_data, paste0("Table_SVs_loops_GRHL.all_overlaps.", loops_kb, "kb_res.with_damaging_anno.tsv")))
 }
 
 
