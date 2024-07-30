@@ -84,10 +84,10 @@ for(marker in MARKERS){
                 " for window = ", WIN, " bp") )
   
   # add ID
-  snv_id <- paste(paste(enh_SNVs$seqnames_sbj, enh_SNVs$start_sbj-1, sep=":"), enh_SNVs$end_sbj,sep="-")
-  snv_id <- paste0(snv_id, "-", enh_SNVs$reference_genome_allele, "/", enh_SNVs$mutated_to_allele)
-  enh_SNVs$snv_id <- snv_id
-  enh_SNVs <- enh_SNVs %>% relocate(., snv_id, .before = seqnames_sbj)
+  snv_id <- paste(enh_SNVs$seqnames_sbj, enh_SNVs$end_sbj-1, sep=":")
+  snv_id <- paste0(snv_id, "_", enh_SNVs$reference_genome_allele, "/", enh_SNVs$mutated_to_allele)
+  enh_SNVs$ID <- snv_id
+  enh_SNVs <- enh_SNVs %>% relocate(., ID, .before = seqnames_sbj)
   
   output_enh_SNVs[[marker]] <- enh_SNVs
   

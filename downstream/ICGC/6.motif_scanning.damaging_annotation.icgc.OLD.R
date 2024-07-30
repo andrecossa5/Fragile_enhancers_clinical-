@@ -23,20 +23,20 @@ library(BSgenome.Hsapiens.UCSC.hg19)
 SEED <- 4321
 set.seed(SEED)
   
+dir <- "local" # "local" or "hpc"
 if(dir == "hpc"){
-  path_enh_SSMs <- list("CtIP" = fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/enhancers_SSMs_overlaps/data/Table_enh_SSMs_CtIP.all_overlaps.", WIN, "bp_WIN.tsv")), 
-                        "GRHL" = fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/enhancers_SSMs_overlaps/data/Table_enh_SSMs_GRHL.all_overlaps.", WIN, "bp_WIN.tsv")))
+  path_enh_SSMs <- list("CtIP" = fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/OLD/enhancers_SSMs_overlaps/data/Table_enh_SSMs_CtIP.all_overlaps.", WIN, "bp_WIN.tsv")), 
+                        "GRHL" = fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/OLD/enhancers_SSMs_overlaps/data/Table_enh_SSMs_GRHL.all_overlaps.", WIN, "bp_WIN.tsv")))
   path_results <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/damaging_variants_annotation/")  
 } else {
-  path_enh_SSMs <- list("CtIP" = fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/enhancers_SSMs_overlaps/data/Table_enh_SSMs_CtIP.all_overlaps.", WIN, "bp_WIN.tsv")), 
-                        "GRHL" = fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/enhancers_SSMs_overlaps/data/Table_enh_SSMs_GRHL.all_overlaps.", WIN, "bp_WIN.tsv")))
-  path_results <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/damaging_variants_annotation/")
+  path_enh_SSMs <- list("CtIP" = fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/OLD/enhancers_SSMs_overlaps/data/Table_enh_SSMs_CtIP.all_overlaps.", WIN, "bp_WIN.tsv")), 
+                        "GRHL" = fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/OLD/enhancers_SSMs_overlaps/data/Table_enh_SSMs_GRHL.all_overlaps.", WIN, "bp_WIN.tsv")))
+  path_results <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/OLD/damaging_variants_annotation/")
 }
 
 WIN <- 1000
 MARKERS <- c("CtIP", "GRHL")
 motif_thresh <- 70 # score is typically expressed as a percentage of the maximum possible score for a match to the PWM. 
-dir <- "local" # "local" or "hpc"
 save_anno <- F
 
 
@@ -52,9 +52,12 @@ enh_SSMs <- list()
 enh_gr <- list()
 for(marker in MARKERS){
   enh_SSMs[[marker]] <- read_tsv(path_enh_SSMs[[marker]])
+
+  enh_SSMs_filt <- enh_SSMs[[marker]] %>% dplyr::select(., c(seqnames, start, end, width, summit, name))
   
   # Convert 50bp extended enhancers into GRanges 
-  enh_gr1 <- makeGRangesFromDataFrame(enh_SSMs[[marker]][,c(1:4,7:8)], keep.extra.columns = T, 
+  enh_gr1 <- makeGRangesFromDataFrame(enh_SSMs_filt, 
+                                      keep.extra.columns = T, 
                                       seqnames.field = "seqnames", start.field = "start", end.field = "end", ignore.strand = T)
   enh_gr[[marker]] <- enh_gr1
 }

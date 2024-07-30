@@ -1,5 +1,4 @@
 
-library(fs)  # File manipulations
 library(tidyverse)
 library(GenomicRanges)
 library(viridis)
@@ -11,37 +10,38 @@ source("/Users/ieo6983/Desktop/enhancers_project/Analyses/loops/loops_functions.
 kb <- 2
 
 path_main <- "/Users/ieo6983/Desktop/fragile_enhancer_clinical"
-path_data <- fs::path(path_main, "data") 
-path_results <- fs::path(path_main, "results")
-path_hichip <- fs::path(path_data, "functional_genomics/HiChip/filtered_loops/")
-path_enhancers <- fs::path(path_data, "functional_genomics/others")
-path_degs <- "/Users/ieo6983/Desktop/expression/DEGs/Df_DEGs.df_LFC_sig.padj_0.05.log2FC_1.Up_and_Down.tsv"
+path_hichip <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/HiChip/filtered_loops/")
+path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/")
+path_enhancers_ctip <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/CtIP_enh.hq_signal.clustered.tsv")
+path_enhancers_grhl <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/GRHL_enh.hq_signal.clustered.tsv")
+path_tss <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/others/TSSs_elisa/TSSs_from_USCS_hg19_EMSEMBL.tsv")
+path_degs <- fs::path("/Users/ieo6983/Desktop/expression/DEGs/Df_DEGs.df_LFC_sig.padj_0.05.log2FC_1.Up_and_Down.tsv")
+path_anno_loops <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/NEW/", kb, "kb/data/"))
 
-path_main_input <- sprintf("/Users/ieo6983/Desktop/enhancers_project/Analyses/loops/results/%skb/data", kb)
-path_output <- fs::path(sprintf("/Users/ieo6983/Desktop/enhancers_project/Analyses/loops/results/%skb", kb))
+path_results <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/NEW/", kb, "kb"))
 
 
 ##
 
 
 # Read loops
-scr_enh_degs_only <- read_tsv(fs::path(path_main_input, sprintf("%skb_SCR.anno_loops.GRHL2_enh_DEGs_prom_ONLY.tsv", kb)))
-kd_enh_degs_only <- read_tsv(fs::path(path_main_input, sprintf("%skb_KD.anno_loops.GRHL2_enh_DEGs_prom_ONLY.tsv", kb)))
+scr_enh_degs_only <- read_tsv(fs::path(path_anno_loops, sprintf("%skb_SCR.anno_loops.GRHL2_enh_DEGs_prom_ONLY.tsv", kb)))
+kd_enh_degs_only <- read_tsv(fs::path(path_anno_loops, sprintf("%skb_KD.anno_loops.GRHL2_enh_DEGs_prom_ONLY.tsv", kb)))
 
 # condition-specific
-scr_specific <- read_tsv(fs::path(path_main_input, sprintf("%skb_SCR_specific_loops.tsv", kb)))
-kd_specific <- read_tsv(fs::path(path_main_input, sprintf("%skb_KD_specific_loops.tsv", kb)))
+scr_specific <- read_tsv(fs::path(path_anno_loops, sprintf("%skb_SCR_specific_loops.tsv", kb)))
+kd_specific <- read_tsv(fs::path(path_anno_loops, sprintf("%skb_KD_specific_loops.tsv", kb)))
 
 # Read GRHL2-bound enhancers
-columns_names <- c("chrom", "start", "end", "cluster")
-enh_grhl2 <- read_tsv(fs::path(path_enhancers, "Cluster_GRHL_Enh_All.txt"), col_names = columns_names, comment = "#")
-# Pre-process: add summit & enhancer name 
-enh_grhl2$summit <- enh_grhl2$end
+enh_grhl2 <- read_tsv(path_enhancers_grhl)
+
+# change enhancers name  
+enh_grhl2$chrom <- paste0("chr", enh_grhl2$chrom)
 enh_grhl2$name <- str_c(enh_grhl2$chrom, enh_grhl2$summit, sep=":")
 
 # Add high-low category
-clusters_high <- c("GRHL_cluster_1_Enh", "GRHL_cluster_2_Enh", "GRHL_cluster_4_Enh")
-clusters_low <- c("GRHL_cluster_5.0", "GRHL_cluster_5.1_Enh", "GRHL_cluster_5.2_Enh", "GRHL_cluster_5.3_Enh")
+clusters_high <- c("cluster_1", "cluster_2", "cluster_3", "cluster_4")
+clusters_low <- c("cluster_5")
 enh_grhl2$group <- "high"
 enh_grhl2[enh_grhl2$cluster %in% clusters_low, ]$group <- "low"
 
@@ -123,11 +123,11 @@ for(cond in c("scr", "kd")){
   cat("\n")
   
   h <- as.data.frame(table(clusters_in_loops)) %>% 
-    filter(clusters_in_loops %in% clusters_high) %>% 
-    select(Freq) %>% colSums()
+    dplyr::filter(clusters_in_loops %in% clusters_high) %>% 
+    dplyr::select(Freq) %>% colSums()
   l <- as.data.frame(table(clusters_in_loops)) %>% 
-    filter(clusters_in_loops %in% clusters_low) %>% 
-    select(Freq) %>% colSums()
+    dplyr::filter(clusters_in_loops %in% clusters_low) %>% 
+    dplyr::select(Freq) %>% colSums()
   
   hr <- h / sum(enh_grhl2$group == "high")
   lr <- l / sum(enh_grhl2$group == "low")
@@ -173,7 +173,6 @@ cond_spec_degs %>% pivot_longer(-group) %>%
   scale_fill_manual(values = c("purple3", "orange3"))+
   theme(axis.text.x = element_text(size = 12, color = "black"))
 
-
 # Number of DEGs involved in condition-sepcific loops
 cond_spec <-  list("scr" = scr_enh_degs_only_spec, "kd" = kd_enh_degs_only_spec)
 
@@ -204,7 +203,7 @@ for(cond in c("scr", "kd")){
   degs_uniq <- left_join(degs_uniq, DEGs[, c("gene_name", "DE", "log2FoldChange", "padj")], by = "gene_name")
   
   degs_in_loops_spec[[cond]] <- degs_uniq
-  #degs_uniq %>% write_tsv(., fs::path(path_output, sprintf("/data/%skb_%s.DEGs_in_enh_deg_loops.cond_spec",kb, toupper(cond)), ext = "tsv"))
+  #degs_uniq %>% write_tsv(., fs::path(path_results, paste0("/data/", kb, "kb_", toupper(cond), ".DEGs_in_enh_deg_loops.cond_spec.tsv")))
 }
 
 
@@ -218,11 +217,11 @@ for(cond in c("scr", "kd")){
   cat("\n")
   
   h <- as.data.frame(table(clusters_in_loops)) %>% 
-    filter(clusters_in_loops %in% clusters_high) %>% 
-    select(Freq) %>% colSums()
+    dplyr::filter(clusters_in_loops %in% clusters_high) %>% 
+    dplyr::select(Freq) %>% colSums()
   l <- as.data.frame(table(clusters_in_loops)) %>% 
-    filter(clusters_in_loops %in% clusters_low) %>% 
-    select(Freq) %>% colSums()
+    dplyr::filter(clusters_in_loops %in% clusters_low) %>% 
+    dplyr::select(Freq) %>% colSums()
   
   hr <- h / sum(enh_grhl2$group == "high")
   lr <- l / sum(enh_grhl2$group == "low")
@@ -308,7 +307,7 @@ gsea_degs_all
 
 
 # Save DEGs for EnrichR
-#degs_in_loops_spec[["scr"]] %>% filter(DE == "Down") %>% .$gene_name %>% as.data.frame %>% write_tsv(., fs::path(path_output, "/data/scr_specific_loops_DEGs.Down.tsv"))
-#degs_in_loops_spec[["kd"]] %>% filter(DE == "Up") %>% .$gene_name %>% as.data.frame %>% write_tsv(., fs::path(path_output, "/data/kd_specific_loops_DEGs.Up.tsv"))
+#degs_in_loops_spec[["scr"]] %>% filter(DE == "Down") %>% .$gene_name %>% as.data.frame %>% write_tsv(., fs::path(path_results, "/data/scr_specific_loops_DEGs.Down.tsv"))
+#degs_in_loops_spec[["kd"]] %>% filter(DE == "Up") %>% .$gene_name %>% as.data.frame %>% write_tsv(., fs::path(path_results, "/data/kd_specific_loops_DEGs.Up.tsv"))
 
 

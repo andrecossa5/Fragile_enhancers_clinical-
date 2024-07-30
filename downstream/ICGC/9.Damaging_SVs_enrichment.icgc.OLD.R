@@ -10,8 +10,8 @@ WIN <- 1000
 MARKERS <- c("CtIP", "GRHL")
 motif_thresh <- 40 
 
-path_variants_anno <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/data/damaging_variants_annotation/")
-path_anno_ehnacers <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/annotated_enhancers/2kb_GRHL2_enhancers.from_SCR_specific_loops.linked_to_DOWN_DEGs.tsv")
+path_variants_anno <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/damaging_variants_annotation/")
+path_anno_ehnacers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/annotated_enhancers/2kb_GRHL2_enhancers.from_SCR_specific_loops.linked_to_DOWN_DEGs.tsv")
 
 
 ##

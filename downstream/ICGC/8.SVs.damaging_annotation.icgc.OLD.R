@@ -5,7 +5,7 @@
 #'Deletions in which both bpts fall within E - P region bring enhancer and promoter closer.
 #'@Interchromosomal-translocation is damaging if 1 bkpt falls within E - P region and the other one falls outside.
 #'two bkpts of the same SV cannot fall within the same loops, because they fall in different chromosomes.
-#'@Inversion is damaging is 1 1 bkpt falls within E - P region and the other one falls outside
+#'@Inversion is damaging is damaging if 1 bkpt falls within E - P region and the other one falls outside
 #'and the distance 'outer' bkpt - bin is (1) greater than the distance bin - 'inner' bkpt, (2) greater than distance (E-P) / 2 
 
 library(tidyverse)
@@ -22,7 +22,7 @@ loops_kb <- 2
 naive <- F
 
 path_SVs <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/raw_ICGC/structural_somatic_mutation.tsv")
-path_loops <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/", loops_kb, "kb/data/2kb_Unified_table.SCR_plus_KD_counts.all_anno_loops.ENH_DEGs_any.tsv"))
+path_loops <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/OLD/", loops_kb, "kb/data/2kb_Unified_table.SCR_plus_KD_counts.all_anno_loops.ENH_DEGs_any.tsv"))
 path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/others/Cluster_GRHL_Enh_All.txt")
   
 

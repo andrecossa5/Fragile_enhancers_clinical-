@@ -7,27 +7,29 @@
 #' 
 
 
-library(fs)  # File manipulations
 library(tidyverse)
 
 SEED <- 4321
 set.seed(SEED)
+save_tables <- F
 #source("./Desktop/enhancers_project/Analyses/loops/loops_functions.R")
 
 
 ### Loops Table - Method 1 ###
-kb <- 4
+kb <- 2
 
 path_main <- "/Users/ieo6983/Desktop/fragile_enhancer_clinical"
-path_data <- fs::path(path_main, "data") 
-path_results <- fs::path(path_main, "results")
-path_hichip <- fs::path(path_data, "functional_genomics/HiChip/filtered_loops/")
-path_enhancers <- fs::path(path_data, "functional_genomics/others")
-path_tss <- file.path(path_data, "functional_genomics/others/TSSs_elisa/TSSs_from_USCS_hg19_EMSEMBL.tsv")
-path_degs <- "/Users/ieo6983/Desktop/expression/DEGs/Df_DEGs.df_LFC_sig.padj_0.05.log2FC_1.Up_and_Down.tsv"
+path_hichip <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/HiChip/filtered_loops/")
+path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/")
+path_enhancers_ctip <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/CtIP_enh.hq_signal.clustered.tsv")
+path_enhancers_grhl <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/GRHL_enh.hq_signal.clustered.tsv")
+path_tss <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/others/TSSs_elisa/TSSs_from_USCS_hg19_EMSEMBL.tsv")
+path_degs <- fs::path("/Users/ieo6983/Desktop/expression/DEGs/Df_DEGs.df_LFC_sig.padj_0.05.log2FC_1.Up_and_Down.tsv")
 
-path_main_input <- sprintf("/Users/ieo6983/Desktop/enhancers_project/Analyses/loops/results/%skb/data", kb)
-path_output <- fs::path(sprintf("/Users/ieo6983/Desktop/enhancers_project/Analyses/loops/results/%skb", kb))
+path_results <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/NEW/", kb, "kb"))
+path_results_tables <- fs::path( paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/NEW/", kb, "kb", "/data/tables/"))
+if(!dir.exists(path_results)){dir.create(path_results, recursive = T)}
+if(!dir.exists(path_results_tables)){dir.create(path_results_tables, recursive = T)}
 
 
 ##
@@ -285,11 +287,11 @@ dim(common)[1]+dim(kd_specific)[1] == dim(kd)[1]
 
 
 # Read GRHL2-bound enhancers
-columns_names <- c("chrom", "start", "end", "cluster")
-enh_grhl2 <- read_tsv(fs::path(path_enhancers, "Cluster_GRHL_Enh_All.txt"), col_names = columns_names, comment = "#")
+columns_names <- c("chrom", "start", "end", "name", "summit", "cluster")
+enh_grhl2 <- read_tsv(path_enhancers_grhl)
 
-# Pre-process: add summit & enhancer name 
-enh_grhl2$summit <- enh_grhl2$end
+# change enhancers name  
+enh_grhl2$chrom <- paste0("chr", enh_grhl2$chrom)
 enh_grhl2$name <- str_c(enh_grhl2$chrom, enh_grhl2$summit, sep=":")
 
 # SCR
@@ -312,7 +314,7 @@ kd_enh <- kd_enh_overlaps %>% dplyr::filter(., !is.na(name1) | !is.na(name2))
 
 # Read TSSs
 TSSs <- read_tsv(path_tss)
-DEGs <- read_tsv("./Desktop/expression/DEGs/Df_DEGs.df_LFC_sig.padj_0.05.log2FC_1.Up_and_Down.tsv")
+DEGs <- read_tsv(path_degs)
 
 # All DEGs are present in TSS file
 sum(!toupper(DEGs$gene_id) %in% toupper(TSSs$gene_id))
@@ -347,20 +349,11 @@ kd_enh_degs_unb <- unbundle_ambiguous_bins(kd_enh_degs)
 dim(scr_enh_degs); dim(scr_enh_degs_unb)
 dim(kd_enh_degs); dim(kd_enh_degs_unb)
 
-# Save tables
-#scr_enh_degs %>% write_tsv(., fs::path(path_output, sprintf("/data/tables/%skb_SCR.all_anno_loops.ENH_DEGs_any", kb), ext = "tsv"))
-#scr_enh_degs_unb %>% write_tsv(., fs::path(path_output, sprintf("/data/tables/%skb_SCR.all_anno_loops.ENH_DEGs_any.unbundled", kb), ext = "tsv"))
-#kd_enh_degs %>% write_tsv(., fs::path(path_output, sprintf("/data/tables/%skb_KD.all_anno_loops.ENH_DEGs_any", kb), ext = "tsv"))
-#kd_enh_degs_unb %>% write_tsv(., fs::path(path_output, sprintf("/data/tables/%skb_KD.all_anno_loops.ENH_DEGs_any.unbundled", kb), ext = "tsv"))
-
 
 ##
 
 
 # Unique table 
-scr_enh_degs <- read_tsv(fs::path(path_output, sprintf("/data/tables/%skb_SCR.all_anno_loops.ENH_DEGs_any", kb), ext = "tsv"))
-kd_enh_degs <- read_tsv(fs::path(path_output, sprintf("/data/tables/%skb_KD.all_anno_loops.ENH_DEGs_any", kb), ext = "tsv"))
-
 scr_enh_degs_spec <- inner_join(scr_enh_degs, scr_specific, by = c('seqnames1', 'start1', 'end1', 'seqnames2', 'start2', 'end2'))
 kd_enh_degs_spec <- inner_join(kd_enh_degs, kd_specific, by = c('seqnames1', 'start1', 'end1', 'seqnames2', 'start2', 'end2'))
 enh_degs_common <- inner_join(scr_enh_degs, kd_enh_degs, by = c('seqnames1', 'start1', 'end1', 'seqnames2', 'start2', 'end2'))
@@ -376,8 +369,22 @@ uni_enh_degs <- full_join(scr_enh_degs, kd_enh_degs,
 
 # Do sizes correspond?
 dim(scr_enh_degs_spec)[1] + dim(kd_enh_degs_spec)[1] + dim(enh_degs_common)[1] == dim(uni_enh_degs)[1]
-#uni_enh_degs %>% write_tsv(., fs::path(path_output, sprintf("/data/tables/%skb_Unified_table.SCR_plus_KD_counts.all_anno_loops.ENH_DEGs_any", kb), ext = "tsv"))
 
 
 ##
+
+
+# Save tables
+if(save_table == T){
+  scr_enh_degs %>% write_tsv(., fs::path(path_results_tables, paste0(kb, "kb_SCR.all_anno_loops.ENH_DEGs_any.tsv")))
+  scr_enh_degs_unb %>% write_tsv(., fs::path(path_results_tables, paste0(kb, "kb_SCR.all_anno_loops.ENH_DEGs_any.unbundled.tsv")))
+  kd_enh_degs %>% write_tsv(., fs::path(path_results_tables, paste0(kb, "kb_KD.all_anno_loops.ENH_DEGs_any.tsv")))
+  kd_enh_degs_unb %>% write_tsv(., fs::path(path_results_tables, paste0(kb, "kb_KD.all_anno_loops.ENH_DEGs_any.unbundled.tsv")))
+  
+  uni_enh_degs %>% write_tsv(., fs::path(path_results_tables, paste0(kb, "kb_Unified_table.SCR_plus_KD_counts.all_anno_loops.ENH_DEGs_any.tsv")))
+}
+
+
+##
+
 

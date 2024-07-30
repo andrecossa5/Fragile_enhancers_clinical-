@@ -349,15 +349,5 @@ if(save_temp == T){
 # - implement for hartwig as well
 # - implement for hartwig vs. ICGC
 
-# - Define controls (what about inactive GRHL2/CtIP enhancers?)
 # - Exclude hypermutated regions under physiological conditions?
-
-
-
-# DONE: 
-# - Add distribution of mutation frequency for random regions 
-# - What about WIN = 50 bp? - Check multiple windows 
-# - Plot distribution x cluster of enhancers - NO per ora, solo high-low
-# - todo add zeros to high vs. low 
-# - Plot distribution for high vs. low enhancers 
 

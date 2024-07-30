@@ -4,14 +4,22 @@ library(tidyverse)
 SEED <- 4321
 set.seed(SEED)
 
+set <- "NEW"  # NEW or OLD, for new or old set of enhancers 
+path_loops <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/", set)
+save_output <- F
+                             
 
 ##
+
 
 # All loops contain at least 1 enhancer #
 
 for(kb in c(2,4)){
+  
   print(paste0("Annotating enhancers from ", kb, " kb loops"))
-  loops_table <-  read_tsv(sprintf("/Users/ieo6983/Desktop/enhancers_project/Analyses/loops/results/%skb/data/tables/%skb_Unified_table.SCR_plus_KD_counts.all_anno_loops.ENH_DEGs_any.tsv",kb,kb)) %>%
+  
+  loops_table <-  read_tsv(fs::path(path_loops, 
+    sprintf("%skb/data/tables/%skb_Unified_table.SCR_plus_KD_counts.all_anno_loops.ENH_DEGs_any.tsv", kb, kb))) %>% 
     suppressMessages()
   
   # Select only loops of interest
@@ -26,9 +34,16 @@ for(kb in c(2,4)){
   
   print(paste0("Total number of enhancers from SCR-specific-Down loops, ", kb, " kb: ", dim(enh_oi)[1]))
   
-  path_output <- sprintf("/Users/ieo6983/Desktop/enhancers_project/Analyses/loops/results/%skb/data/anno_enhancers/", kb)
-  file_name <- sprintf("%skb_GRHL2_enhancers.from_SCR_specific_loops.linked_to_DOWN_DEGs.tsv", kb)
-  #enh_oi %>% write_tsv(., paste0(path_output, file_name))
+  if(save_output == T){
+    path_results <- fs::path(path_loops, sprintf("%skb/data/anno_enhancers/", kb))
+    if(!dir.exists(path_results)){dir.create(path_results)}
+    file_name <- sprintf("%skb_GRHL2_enhancers.from_SCR_specific_loops.linked_to_DOWN_DEGs.tsv", kb)
+    
+    enh_oi %>% write_tsv(., fs::path(path_results, file_name))
+  }
 }
+
+
+##
 
 
