@@ -6,15 +6,16 @@ library(tidyverse)
 SEED <- 4321
 set.seed(SEED)
 
-WIN <- 1000
-MARKERS <- c("CtIP", "GRHL")
-motif_thresh <- 40 
+MARKERS <- c("GRHL") # Loops annotated wrt GRHL2 and not CtIP
+loops_kb <- 2
 
-path_variants_anno <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/damaging_variants_annotation/")
-path_anno_ehnacers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/annotated_enhancers/2kb_GRHL2_enhancers.from_SCR_specific_loops.linked_to_DOWN_DEGs.tsv")
+path_variants_anno <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/OLD/damaging_variants_annotation/SVs/Table_SVs_loops_GRHL.all_overlaps.2kb_res.with_damaging_anno.tsv")  
+path_anno_ehnacers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/OLD/annotated_enhancers/2kb_GRHL2_enhancers.from_SCR_specific_loops.linked_to_DOWN_DEGs.tsv")
 
 
 ##
+
+
 
 
 for(marker in MARKERS){
@@ -22,14 +23,21 @@ for(marker in MARKERS){
   cat("\n")
   
   # Load inputs
-  variants_anno <- read_tsv(
-    fs::path(path_variants_anno, paste0("Table_enh_SSMs_", marker, ".all_overlaps.", WIN, "bp_WIN.with_damaging_anno.motif_thresh_", motif_thresh, ".tsv")))  
-  variants_anno$damaging <- factor(variants_anno$damaging, levels = c(1,2,3))
-  
-  print(paste0("Total number of SNVs within all enhancers, across all patients: ", dim(variants_anno)[1]))
+  variants_anno <- read_tsv(path_variants_anno)  
+
+  print(paste0("Total number of SVs within all E - P regions, across all patients: ", dim(variants_anno)[1]))
   print("How many damaging?")
-  print(paste0("Level ", names(table(variants_anno$damaging)), ": ", round(table(variants_anno$damaging) / dim(variants_anno)[1] * 100,2), "%"))
+  print(paste0(round(sum(variants_anno$damaging) / dim(variants_anno)[1] * 100,2), " %"))
   cat("\n")
+  
+  if(marker == "GRHL"){
+    
+    
+  }
+  
+  
+  
+  ##
   
   # Annotate enhancers
   if(marker == "GRHL"){

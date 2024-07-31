@@ -7,17 +7,22 @@ date: "2024-03-25"
 ```{r setup, include=FALSE, message=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
-library("DESeq2")
-library("apeglm")
-library("pheatmap")
-library("RColorBrewer")
-library("gprofiler2")
+library(DESeq2)
+library(apeglm)
+library(pheatmap)
+library(RColorBrewer)
+library(gprofiler2)
 library(fgsea)
 library(ComplexHeatmap)
 
-IN_FOLDER <- "/Users/ieo6983/Desktop/expression/"
-OUT_FOLDER_DEGs <- "/Users/ieo6983/Desktop/expression/DEGs/"
-setwd(IN_FOLDER)
+# Local 
+#IN_FOLDER <- fs::path("/Users/ieo6983/Desktop/expression/")
+#OUT_FOLDER_DEGs <- fs::path("/Users/ieo6983/Desktop/expression/DEGs/")
+
+# HPC
+IN_FOLDER <- fs::path("/hpcnfs/scratch/PGP/ebugani/expression/results/")
+OUT_FOLDER_DEGs <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/expression/RNA_seq/DEGs/")
+
 ```
 
 Referring to: https://www.bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#input-data
@@ -37,8 +42,8 @@ GRHL2KD#2=S45031
 
 ```{r}
 # Input matrix gene_counts x sample
-g_1st <- read_tsv("./results_1st_group/star_salmon/salmon.merged.gene_counts.tsv") 
-g_2nd <- read_tsv("./results_2nd_group/star_salmon/salmon.merged.gene_counts.tsv")
+g_1st <- read_tsv(fs::path(IN_FOLDER,"results_1st_group/star_salmon/salmon.merged.gene_counts.tsv"))
+g_2nd <- read_tsv(fs::path(IN_FOLDER, "results_2nd_group/star_salmon/salmon.merged.gene_counts.tsv"))
 
 sum(!g_1st$gene_id == g_2nd$gene_id)
 sum(!g_1st$gene_name == g_2nd$gene_name)
@@ -240,7 +245,7 @@ df_export <- as.data.frame(resOrdered) %>%
   left_join(., id_to_gene, by = "gene_id") %>%
   relocate(., gene_name, .after = gene_id)
 
-#write.csv(df_export, file=paste0(OUT_FOLDER_DEGs, "DEGs_Condition_GRHL2KD_SCR.csv"))
+#write.csv(df_export, file=fs::path(OUT_FOLDER_DEGs, "DEGs_Condition_GRHL2KD_SCR.csv"))
 
 ```
 
@@ -356,7 +361,7 @@ df_LFC_sig$DE <- ifelse(df_LFC_sig$log2FoldChange > 0, "Up", "Down")
 # df_LFC (shrinked) is a smaller version wrt df_export
 sum(!df_LFC_sig$gene_name %in% df_export_sig$gene_name)
 
-#df_LFC_sig %>% arrange(., log2FoldChange) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "./Df_DEGs.df_LFC_sig.padj_0.01.log2FC_1.Up_and_Down.tsv"))
+#df_LFC_sig %>% arrange(., log2FoldChange) %>% write_tsv(., fs::path(OUT_FOLDER_DEGs, "Df_DEGs.df_LFC_sig.padj_0.01.log2FC_1.Up_and_Down.tsv"))
 
 ```
 
@@ -529,7 +534,7 @@ GSEA(gene_list = ranked_genes, GO_file = onco_sig, pval = 0.05)
 p <- GSEA(ranked_genes, hallmark, pval = 0.05)
 print(p$Plot)
 
-#ggsave(plot = p$Plot, filename = "./GSEA/Plots/GSEA.DB_h.all.v2023.2.Hs.top_10.png", device = "png", width = 10, height = 6)
+#ggsave(plot = p$Plot, filename = fs::path(OUT_FOLDER_DEGs, "GSEA/Plots/GSEA.DB_h.all.v2023.2.Hs.top_10.png"), device = "png", width = 10, height = 6)
 ```
 
 ```{r}
