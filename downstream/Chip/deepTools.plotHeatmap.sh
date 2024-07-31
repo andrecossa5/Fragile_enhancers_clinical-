@@ -10,12 +10,12 @@
 source ~/.bashrc
 mamba activate deepTools
 
-IN_DIR='/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL/downstream/deepTools/'
+IN_DIR='/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/deepTools/'
 
 factor='CtIP'
-REGIONS_DIR='/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL/downstream/peaks_union/'
+REGIONS_DIR='/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/peaks_union/'
 REGIONS_FILE=$(ls ${REGIONS_DIR}/*${factor}.filtered*.narrowPeak)
-BIGWIG_DIR='/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL/bwa/mergedLibrary/bigwig/'
+BIGWIG_DIR='/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/bwa/mergedLibrary/bigwig/'
 BIGWIG_FILES=$(ls ${BIGWIG_DIR}/*${factor}*)
  
 cd $IN_DIR
