@@ -5,8 +5,13 @@ SEED <- 4321
 set.seed(SEED)
 
 set <- "NEW"  # NEW or OLD, for new or old set of enhancers 
-path_loops <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/", set)
 save_output <- F
+location <- "local" # 'local' or 'hpc'
+
+path_loops <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/", set)
+if(location == "hpc"){
+  path_loops <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/NEW/", set)
+}
                              
 
 ##
