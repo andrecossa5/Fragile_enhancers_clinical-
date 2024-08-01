@@ -12,16 +12,15 @@ library(GenomicRanges)
 library(viridis)
 library(gridExtra)
   
-source("./Desktop/enhancers_project/Analyses/loops/loops_functions.R")
+source("/Users/ieo6983/Desktop/fragile_enhancer_clinical/utils/loops_functions.R")
 
 SEED <- 4321
 set.seed(SEED)
-
+location <- "local" # 'local' or 'hpc'
 
 ### Hi-ChIP Loops ###
-kb <- 4
+kb <- 2
 
-path_main <- "/Users/ieo6983/Desktop/fragile_enhancer_clinical"
 path_hichip <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/HiChip/filtered_loops/")
 path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/")
 path_enhancers_ctip <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/CtIP_enh.hq_signal.clustered.tsv")
@@ -31,6 +30,18 @@ path_tss <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/func
 path_degs <- fs::path("/Users/ieo6983/Desktop/expression/DEGs/Df_DEGs.df_LFC_sig.padj_0.05.log2FC_1.Up_and_Down.tsv")
 
 path_results <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/NEW/", kb, "kb"))
+
+if(location == "hpc"){
+  path_hichip <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/HiChip/filtered_loops/")
+  path_enhancers <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/")
+  path_enhancers_ctip <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/CtIP_enh.hq_signal.clustered.tsv")
+  path_enhancers_grhl <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/GRHL_enh.hq_signal.clustered.tsv")
+ 
+  path_tss <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/others/TSSs_elisa/TSSs_from_USCS_hg19_EMSEMBL.tsv")
+  path_degs <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/expression/RNA_seq/DEGs/Df_DEGs.df_LFC_sig.padj_0.05.log2FC_1.Up_and_Down.tsv")
+  
+  path_results <- fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/NEW/", kb, "kb"))
+}
 
 
 ##
@@ -154,9 +165,9 @@ p3 <- df3 %>% ggplot(., aes(x = group2, y = value, fill = var, order = group, wi
   #facet_wrap(~group)
 print(p3)
 
-#ggsave(plot = p1, filename = fs::path(path_output, sprintf("/plots/%skb_number_of_loops",kb), ext = "png"), device = "png", width = 7, height = 5)
-#ggsave(plot = p2, filename = fs::path(path_output, sprintf("/plots/%skb_number_of_GRHL2_enhancers_loops",kb), ext = "png"), device = "png", width = 7, height = 5)
-#ggsave(plot = p3, filename = fs::path(path_output, sprintf("/plots/%skb_number_of_GRHL2_enhancers_loops_over_tot",kb), ext = "png"), device = "png", width = 7, height = 5)
+#ggsave(plot = p1, filename = fs::path(path_results, sprintf("/plots/%skb_number_of_loops",kb), ext = "png"), device = "png", width = 7, height = 5)
+#ggsave(plot = p2, filename = fs::path(path_results, sprintf("/plots/%skb_number_of_GRHL2_enhancers_loops",kb), ext = "png"), device = "png", width = 7, height = 5)
+#ggsave(plot = p3, filename = fs::path(path_results, sprintf("/plots/%skb_number_of_GRHL2_enhancers_loops_over_tot",kb), ext = "png"), device = "png", width = 7, height = 5)
 
 df2$group <- factor(df2$group, levels = rev(levels(df2$group)))
 df2$var <- factor(df2$var, levels = rev(levels(df2$var)))
@@ -168,7 +179,7 @@ p <- df2 %>% ggplot(., aes(x = group, y = value, fill = var, order = group, widt
   scale_fill_viridis(discrete = T, direction = -1)+
   coord_flip()
 p
-#ggsave(plot = p, filename = fs::path(path_output, sprintf("/plots/%skb_number_of_GRHL2_enhancers_loops.flip",kb), ext = "png"), device = "png", width = 7, height = 5)
+#ggsave(plot = p, filename = fs::path(path_results, sprintf("/plots/%skb_number_of_GRHL2_enhancers_loops.flip",kb), ext = "png"), device = "png", width = 7, height = 5)
 
 
 ##
