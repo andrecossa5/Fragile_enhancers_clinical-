@@ -3,6 +3,7 @@ library(tidyverse)
 
 SEED <- 4321
 set.seed(SEED)
+location <- "local" # 'local' or 'hpc'
 
 path_clustered_peaks <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/deepTools/heatmap.CtIP_and_GRHL_bw.CtIP_and_GRHL_regions.hq_signal.from_mean.clustered.bed")
 path_peaks_union_ctip <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/peaks_union/merged_peaks.hg19_CtIP.filtered_K27ac_k4me1_k4me3.hq_signal.new_summit.narrowPeak")
