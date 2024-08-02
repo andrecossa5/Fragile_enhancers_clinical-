@@ -2,12 +2,28 @@
 library(tidyverse)
 library(ggplot2)
 
+location <- "local" # 'local' or 'hpc'
 
+path_SSMs <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/raw_ICGC/simple_somatic_mutation.open.tsv")
+path_SSMs_with_AF <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/raw_ICGC/simple_somatic_mutation.open.with_AF.tsv")
+path_STSMs <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/raw_ICGC/structural_somatic_mutation.tsv")
+
+path_results <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/pre_processed_ICGC/")
+
+
+if(location == "hpc"){
+  path_SSMs <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/genomics/raw_ICGC/simple_somatic_mutation.open.tsv")
+  path_SSMs_with_AF <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/genomics/raw_ICGC/simple_somatic_mutation.open.with_AF.tsv")
+  path_STSMs <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/genomics/raw_ICGC/structural_somatic_mutation.tsv")
+  
+  path_results <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/genomics/pre_processed_ICGC/")
+}
+  
 
 ### SIMPLE SOMATIC MUTATIONS ###
 
 # Raw ICGC file contains 17'889'165 instances
-SSMs <- read_tsv("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/raw_ICGC/simple_somatic_mutation.open.tsv")
+SSMs <- read_tsv(path_SSMs)
 dim(SSMs)
 
 
@@ -62,7 +78,7 @@ SSMs_matching$n_ist <- NULL
 ## Re-joining with matching SSMs
 SSMs_new <- rbind(SSMs_matching, SSMs_not_matching)
 
-#write_tsv(SSMs_new, "./icgc_data/simple_somatic_mutation.open.matching_calls.tsv")
+#write_tsv(SSMs_new, fs::path(path_results, "simple_somatic_mutation.open.matching_calls.tsv"))
 
 
 
@@ -70,7 +86,7 @@ SSMs_new <- rbind(SSMs_matching, SSMs_not_matching)
 ### STRUCTURAL SOMATIC MUTATIONS ###
 
 # STSMs 
-STSMs <- read_tsv("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/raw_ICGC/structural_somatic_mutation.tsv") # it contains by default only unique calls
+STSMs <- read_tsv(path_STSMs) # it contains by default only unique calls
 STSMs <- STSMs[, c(1:23)]
 
 # Each STSM has a 'from' breakpoint and a 'to' breakpoint. Split the two info to maintain both as separate bkpts
@@ -91,16 +107,14 @@ STSMs_coords_whole$sv_id_x_class <-
   paste(STSMs_coords_whole$sv_id, STSMs_coords_whole$class, sep = "_")
 STSMs_coords_whole <- relocate(STSMs_coords_whole, sv_id_x_class, .after = sv_id)
 
-
-#write_tsv(STSMs_coords_whole, "./Desktop/fragile_enhancer_clinical/data/genomics/pre_processed_ICGC/structural_somatic_mutation.preprocessed.tsv")
-
+#write_tsv(STSMs_coords_whole, fs::path(path_results, "structural_somatic_mutation.preprocessed.tsv"))
 
 
 
 ### SIMPLE SOMATIC MUTATIONS WITH AF ###
 
 # Raw ICGC file contains 17'889'165 instances
-SSMs <- read_tsv("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/raw_ICGC/simple_somatic_mutation.open.with_AF.tsv")
+SSMs <- read_tsv(path_SSMs_with_AF)
 dim(SSMs)
 
 
@@ -171,6 +185,6 @@ SSMs_matching$n_ist <- NULL
 SSMs_new <- rbind(SSMs_matching, SSMs_not_matching)
 SSMs_new$AF <- round(SSMs_new$mutant_allele_read_count / SSMs_new$total_read_count, 3)
   
-#write_tsv(SSMs_new, "/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/pre_processed_ICGC/simple_somatic_mutation.open.matching_calls.with_AFs.tsv")
+#write_tsv(SSMs_new, fs::path(path_results, "simple_somatic_mutation.open.matching_calls.with_AFs.tsv"))
 
 
