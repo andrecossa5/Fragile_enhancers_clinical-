@@ -10,11 +10,17 @@ WIN <- 1000
 MARKERS <- c("CtIP", "GRHL")
 motif_thresh <- 70
 kb <- 2 # Loop resolution
+location <- "local" # 'local' or 'hpc'
 
 path_variants_anno <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/NEW/damaging_variants_annotation/")
 path_anno_ehnacers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/NEW/", 
                                sprintf("%skb/data/anno_enhancers/%skb_GRHL2_enhancers.from_SCR_specific_loops.linked_to_DOWN_DEGs.tsv", kb, kb))
 
+if(location == "hpc"){
+  path_variants_anno <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/NEW/damaging_variants_annotation/")
+  path_anno_ehnacers <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/NEW/", 
+                                 sprintf("%skb/data/anno_enhancers/%skb_GRHL2_enhancers.from_SCR_specific_loops.linked_to_DOWN_DEGs.tsv", kb, kb))
+}
 
 ##
 
