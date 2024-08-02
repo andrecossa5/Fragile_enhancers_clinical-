@@ -26,9 +26,9 @@ set.seed(SEED)
 
 dir <- "local" # "local" or "hpc"
 if(dir == "hpc"){
-  path_enh_SSMs <- list("CtIP" = fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/enhancers_SSMs_overlaps/data/Table_enh_SSMs_CtIP.all_overlaps.3000bp_WIN.tsv")), 
-                        "GRHL" = fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/enhancers_SSMs_overlaps/data/Table_enh_SSMs_GRHL.all_overlaps.3000bp_WIN.tsv")))
-  path_results <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/damaging_variants_annotation/")  
+  path_enh_SSMs <- list("CtIP" = fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/NEW/enhancers_SSMs_overlaps/data/Table_enh_SSMs_CtIP.all_overlaps.3000bp_WIN.tsv")), 
+                        "GRHL" = fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/NEW/enhancers_SSMs_overlaps/data/Table_enh_SSMs_GRHL.all_overlaps.3000bp_WIN.tsv")))
+  path_results <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/NEW/damaging_variants_annotation/")  
 } else {
   path_enh_SSMs <- list("CtIP" = fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/NEW/enhancers_SSMs_overlaps/data/Table_enh_SNVs.CtIP.all_overlaps.3000bp_WIN.tsv"), 
                         "GRHL" = fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/NEW/enhancers_SSMs_overlaps/data/Table_enh_SNVs.GRHL.all_overlaps.3000bp_WIN.tsv"))
