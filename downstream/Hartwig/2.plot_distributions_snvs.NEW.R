@@ -12,9 +12,7 @@ path_results_data <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/N
 path_results_plots <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/NEW/plots")
 
 path_overlaps_icgc <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/enhancers_SSMs_overlaps/NEW/data/")
-#path_overlaps_icgc <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/enhancers_SSMs_overlaps/data/")
 path_results_icgc <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/enhancers_SSMs_overlaps/NEW/data/")
-#path_results_icgc <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/enhancers_SSMs_overlaps/data/")
   
 SEED <- 4321
 set.seed(SEED) 
@@ -154,12 +152,6 @@ for(marker in MARKERS){
 ##
 
 dev.off()
-
-##
-
-# TODO: convert into a function 
-# TODO: chnage script to accept arguments from command line
-
 
 ##
 
