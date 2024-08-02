@@ -570,7 +570,5 @@ dev.off()
 
 ##
 
-# TODO:
-# Plot the proportions of types of single base substitutions for top SNVs AFs in common enhancers (last plotted)
 
 
