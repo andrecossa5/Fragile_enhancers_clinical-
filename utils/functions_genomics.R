@@ -27,11 +27,20 @@ generate_random_seqs <- function(seed, n_seqs, win, chrom_lengths_info){
   set.seed(seed)
   library(tidyverse)
   path_chrom_sizes <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/hg19.chrom.txt")
-
-  # Define chromosomes info
-  standard_chrom <- paste0("chr", c(seq(1:22), "X", "Y"))
-  chrs_info <- read_tsv(path_chrom_sizes, col_names = c("chrom", "seq_lengths")) %>% 
-    dplyr::filter(., chrom %in% standard_chrom) %>% suppressMessages()
+  
+  if(file.exists(path_chrom_sizes) == F){
+    print("File with chromosome sizes does not exist, using hardcoded sizes:"); cat("\n")
+    
+    standard_chrom <- paste0("chr", c(seq(1:22), "X", "Y"))
+    seq_lengths <- c(249250621, 243199373, 198022430, 191154276, 180915260, 171115067, 159138663, 155270560, 146364022, 141213431, 135534747, 
+                     135006516, 133851895, 115169878, 107349540, 102531392, 90354753, 81195210, 78077248, 63025520, 59373566, 59128983, 51304566, 48129895)
+    chrs_info <- data.frame("chrom" = standard_chrom, "seq_lengths" = seq_lengths)
+  } else {
+    # Define chromosomes info
+    standard_chrom <- paste0("chr", c(seq(1:22), "X", "Y"))
+    chrs_info <- read_tsv(path_chrom_sizes, col_names = c("chrom", "seq_lengths")) %>% 
+      dplyr::filter(., chrom %in% standard_chrom) %>% suppressMessages()
+  }
   
   # Sample chromosomes and start positions 
   ran_seqs <- data.frame(chrom = sample(chrs_info$chrom, n_seqs, replace=T))
