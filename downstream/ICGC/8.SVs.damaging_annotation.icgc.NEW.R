@@ -107,7 +107,7 @@ for(type in unique(SVs$variant_type_simple)){
   if(type == "deletion"){
     dels <- SVs %>% dplyr::filter(., variant_type_simple == type)
     print(paste0("--- Annotating variants of type: ", type, " ---"))
-    print(paste0("Total number of ", type, " : ", dim(dels)[1]))
+    print(paste0("Total number of ", type, " : ", length(unique(dels$sv_id))))
 
     if(naive == T){
       # Check whether bkpt 1 and bkpt 2 of overlap with one E - P region
@@ -159,11 +159,12 @@ for(type in unique(SVs$variant_type_simple)){
     
     # Only SVs overlapping: (1) one loop - NA, or (2) two different loops are damaging   
     overlaps_join <- anno_distinct_loops(df=overlaps_join, col1="unique_loop_id_from", col2="unique_loop_id_to") 
+    print(paste0("Total number of ", type, " overlapping loops : ", length(unique(overlaps_join$sv_id))))
     
     # For each deletion, compute in how many cases it was damaging 
     dam_vec <- overlaps_join %>% group_by(., sv_id) %>% dplyr::summarise(., "how_many_dam" = sum(distinct_loops)) %>% .[,"how_many_dam"]
-    print(paste0("Damaging deletions: ", sum(dam_vec >= 1), " over ", length(unique(dels$sv_id)), 
-                 " (", round(sum(dam_vec >= 1) / length(unique(dels$sv_id)),2)*100, "%)")) 
+    print(paste0("Damaging deletions: ", sum(dam_vec >= 1), " over ", length(unique(overlaps_join$sv_id)), 
+                 " (", round(sum(dam_vec >= 1) / length(unique(overlaps_join$sv_id)),2)*100, "%)"))
     cat("\n") 
     
     # For which loop is SV damaging? (from or to)
@@ -178,7 +179,7 @@ for(type in unique(SVs$variant_type_simple)){
   else if(type == "interchromosomal-translocation"){
     trans <- SVs %>% dplyr::filter(., variant_type_simple == type)
     print(paste0("--- Annotating variants of type: ", type, " ---"))
-    print(paste0("Total number of ", type, ": ", dim(trans)[1])) 
+    print(paste0("Total number of ", type, ": ", length(unique(trans$sv_id)) )) 
    
     if(naive == T){
       # Check whether bkpt 1 and bkpt 2 of overlap with one E - P region
@@ -227,12 +228,14 @@ for(type in unique(SVs$variant_type_simple)){
     
     # full_join joins by all columns in common (only unique_loop_id_from/to is not in common)
     overlaps_join <- full_join(overlaps_from, overlaps_to, relationship = "many-to-many") %>% suppressMessages()
+    print(paste0("Total number of ", type, " overlapping loops : ", length(unique(overlaps_join$sv_id))))
     
     # All translocations within overlaps_join should be damaging
     dam_vec <- is.na(overlaps_join$unique_loop_id_from) & is.na(overlaps_join$unique_loop_id_to)
     if(sum(dam_vec) == 0){
-      print(paste0("Damaging interchromosomal-translocations: ", length(unique(overlaps_join$sv_id)), " over ", length(unique(trans$sv_id)), 
-                   " (", round( length(unique(overlaps_join$sv_id)) / length(unique(trans$sv_id)), 2)*100, "%)"))
+      print("- All interchromosomal translocations overlapping a loop are damaging -")
+      print(paste0("Damaging interchromosomal-translocations: ", length(unique(overlaps_join$sv_id)), " over ", length(unique(overlaps_join$sv_id)), 
+                   " (", round( length(unique(overlaps_join$sv_id)) / length(unique(overlaps_join$sv_id)), 2)*100, "%)"))
       cat("\n")
       
       overlaps_join$damaging <- TRUE
@@ -248,7 +251,7 @@ for(type in unique(SVs$variant_type_simple)){
   else if(type == "inversion"){
     invs <- SVs %>% dplyr::filter(., variant_type_simple == type)
     print(paste0("--- Annotating variants of type: ", type, " ---"))
-    print(paste0("Total number of ", type, ": ", dim(invs)[1])) 
+    print(paste0("Total number of ", type, ": ", length(unique(invs$sv_id)) )) 
     
     # Check whether bkpt 1 and bkpt 2 of overlap with one E - P region
     invs_from <- makeGRangesFromDataFrame(invs, seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt", keep.extra.columns = T)
@@ -271,6 +274,7 @@ for(type in unique(SVs$variant_type_simple)){
     
     # full_join joins by all columns in common (only unique_loop_id_from/to is not in common)
     overlaps_join <- full_join(overlaps_from, overlaps_to, relationship = "many-to-many") %>% suppressMessages()
+    print(paste0("Total number of ", type, " overlapping loops : ", length(unique(overlaps_join$sv_id))))
     
     ##
     
@@ -351,15 +355,15 @@ for(type in unique(SVs$variant_type_simple)){
     
     overlaps_join <- rbind(opt_2_new, opt_3_new) %>% 
       relocate(., damaging, .before = dam_from)
-    print(paste0("Damaging inversions ", length(unique(overlaps_join[overlaps_join$damaging == T,]$sv_id)), " over ", length(unique(invs$sv_id)), 
-                 " (", round( length(unique(overlaps_join[overlaps_join$damaging == T,]$sv_id)) / length(unique(invs$sv_id)), 2)*100, "%)"))
+    print(paste0("Damaging inversions ", length(unique(overlaps_join[overlaps_join$damaging == T,]$sv_id)), " over ", length(unique(overlaps_join$sv_id)), 
+                 " (", round( length(unique(overlaps_join[overlaps_join$damaging == T,]$sv_id)) / length(unique(overlaps_join$sv_id)), 2)*100, "%)"))
     cat("\n")
     
     # Save annotated SVs
     SVs_annotated <- rbind(SVs_annotated, overlaps_join)
   }
-    
 }
+print("*Each SV can be damaging for 1 loop or more.")
 
 
 ##
