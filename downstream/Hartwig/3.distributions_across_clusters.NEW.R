@@ -5,12 +5,18 @@ suppressMessages({
 library(tidyverse)
 library(ggplot2)
 library(ggpubr)
+source("/hpcnfs/scratch/PGP/Ciacci_et_al/fragile_enhancer_clinical/utils/functions_genomics.R")
+
+SEED <- 4321
+set.seed(SEED)
 
 MARKERS <- c("CtIP", "GRHL")
 SOURCES <- c("hart", "icgc")
 anno_only <- F
 label <- "all_enhancers"
+add_control_AF <- T 
 
+path_add_control <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/bin/AF_distribution_random_control.R")
 path_anno_enhancers <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/annotated_enhancers/NEW/")
 hart.ctip.dist <- read_tsv("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/NEW/data/distances.snvs_distribution_over_enhancers.CtIP.all_clusters.all_enhancers.tsv")
 hart.grhl.dist <- read_tsv("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/NEW/data/distances.snvs_distribution_over_enhancers.GRHL.all_clusters.all_enhancers.tsv")
@@ -275,14 +281,45 @@ for(marker in MARKERS){
   AF_i$group <- "high"
   AF_i[AF_i$cluster %in% cluster_groups[[marker]]$low, ]$group <- "low"
   
-  AF_h <- df.dist.marker[["hart"]][, c("name", "cluster", "AF")]
+  # TODO: chnage back to normal AF
+  #AF_h <- df.dist.marker[["hart"]][, c("name", "cluster", "AF")]
+  AF_h <- df.dist.marker[["hart"]][, c("name", "cluster", "PURPLE_AF")]
+  colnames(AF_h)[3] <- "AF"
+    
   AF_h$source <- rep("hart", dim(AF_h)[1])
   AF_h$group <- "high"
   AF_h[AF_h$cluster %in% cluster_groups[[marker]]$low, ]$group <- "low"
   
   AF_all <- na.omit(rbind(AF_i, AF_h)) # Many ICGC samples have no AF info 
   AF_all$source <- factor(AF_all$source, levels = c("icgc", "hart"))
-
+  
+  ## Add AFs dist over random regions as controls
+  if(add_control_AF == T){
+    
+    # Compute overlap among random regions and ICGC/Hartwig variants
+    source(path_add_control)
+    
+    ran_AFs_df_marker <- ran_AFs_df[[marker]] %>% dplyr::select(., name, AF, source)
+    AF_all_red <- AF_all %>% dplyr::select(., name, AF, source)
+    
+    AF_all_plus_control <- rbind(AF_all_red, ran_AFs_df_marker)
+    AF_all_plus_control$source <- factor(AF_all_plus_control$source, levels = c("icgc", "ran_icgc", "hart", "ran_hart"))
+    
+    p_all_c <- AF_all_plus_control %>% 
+      ggplot(., aes(x = source, y = AF, fill = source))+
+      geom_boxplot()+
+      stat_compare_means(label = "p.signif", method = "wilcox.test", 
+                         size = 3, comparisons = list(c("icgc", "hart"), c("ran_icgc", "ran_hart")))+
+      scale_fill_manual(values = c("icgc" = "#9fc8c8", "hart" = "#298c8c", "ran_icgc" = "#b8b8b8", "ran_hart" = "#b8b8b8"))+
+      theme_light()+
+      labs(title = paste0("AFs distribution of all SNVs within enhancers ", marker, " - icgc vs. hartwig + random controls"), 
+           subtitle = "all enhancers")
+    
+    ggsave(p_all_c, 
+           filename = fs::path(path_results_plots, paste0("AFs_distribution_with_controls.", marker, ".png")), 
+           device = "png",  width = 11, height = 7)
+  } 
+  
   # Plot AFs distributions for all enhancers 
   p_all <- AF_all %>% 
     ggplot(., aes(x = source, y = AF, fill = source))+
@@ -333,7 +370,7 @@ for(marker in MARKERS){
   print(paste0("Number of enhancers with SNVs in icgc and hart (both):", length(unique(common_enh$name))))
   perc <- round(length(unique(common_enh$name)) / tot_enh * 100, 2)
   print( paste0( perc , " %"))
-    
+  
   # Compute FC of avg_af in hartwig vs. icgc, for common enhancers 
   common_enh$avg_af.fc <- log2(common_enh$avg_af.y / common_enh$avg_af.x)
   t_test_res <- t.test(common_enh$avg_af.fc)$p.value
@@ -381,7 +418,7 @@ for(marker in MARKERS){
   print(pie_anno)
   # Save df of annotated enhancers with mutations across datasets 
   common_enh[common_enh$anno == "yes", ] %>% write_tsv(., 
-            fs::path(path_results_data, paste0("Anno_enhancers.mutated_across_hart_and_icgc.", marker, ".tsv")))
+                                                       fs::path(path_results_data, paste0("Anno_enhancers.mutated_across_hart_and_icgc.", marker, ".tsv")))
   
   # Only common enhancers wit log2FC(avg. AF) > 0 
   common_enh_sub <- common_enh %>% filter(., avg_af.fc > 0)
@@ -398,7 +435,6 @@ for(marker in MARKERS){
     coord_polar("y", start=0) +
     theme_void()
   print(pie_clusters)
-  
 }
 
 
