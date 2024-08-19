@@ -8,6 +8,8 @@
 #'@Inversion is damaging is damaging if 1 bkpt falls within E - P region and the other one falls outside
 #'and the distance 'outer' bkpt - bin is (1) greater than the distance bin - 'inner' bkpt, (2) greater than distance (E-P) / 2 
 
+suppressMessages({
+  
 library(tidyverse)
 library(GenomicRanges)
 library(assertthat)
@@ -18,17 +20,18 @@ set.seed(SEED)
 #MARKERS <- c("CtIP", "GRHL")
 marker <- "GRHL"
 WIN <- 3000 # enhancers window that was used to compute overlap with SVs
-loops_kb <- 4
+loops_kb <- 2
 naive <- F
 save_SVs_anno <- F
 
-path_SVs <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/raw_ICGC/structural_somatic_mutation.tsv")
-path_loops <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/NEW/", loops_kb, "kb/data/tables/", loops_kb, "kb_Unified_table.SCR_plus_KD_counts.all_anno_loops.ENH_DEGs_any.tsv"))
-path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/GRHL_enh.hq_signal.clustered.tsv")
-path_results_data <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/NEW/damaging_variants_annotation/SVs/")  
+path_SVs <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/NEW/data/Hartwig_all_stsms_info.with_matched_bkpts.no_dup.tsv")
+path_loops <- fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/NEW/", loops_kb, "kb/data/tables/", loops_kb, "kb_Unified_table.SCR_plus_KD_counts.all_anno_loops.ENH_DEGs_any.tsv"))
+path_enhancers <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/GRHL_enh.hq_signal.clustered.tsv")
+path_results_data <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/NEW/data/damaging_variants_annotation/SVs/")  
 
-                              
+
 ##
+
 
 # TODO @OPTIMIZE: naive function. Could make it handle more cases. 
 anno_distinct_loops <- function(df, col1, col2){
@@ -57,29 +60,62 @@ anno_distinct_loops <- function(df, col1, col2){
 ##
 
 
-# Read SVs, loops and enhancers
+# Read and pre-process Hart SVs
 SVs_full <- read_tsv(path_SVs)
+
+# Some checks
+sum(!SVs_full$SAMPLE1 == SVs_full$SAMPLE2, na.rm = T) == 0
+sum(!SVs_full$ID1 == SVs_full$PARID2, na.rm = T) == 0
+sum(!SVs_full$ID2 == SVs_full$PARID1, na.rm = T) == 0
+sum(!SVs_full$TYPE1 == SVs_full$TYPE2, na.rm = T) == 0
+
+# Add unique SV-SAMPLE ID
+SVs_full <- SVs_full %>% dplyr::select(., 
+                           SAMPLE1, TYPE1, ID1, PARID1, 
+                           seqnames1, start1, width1,
+                           seqnames2, start2, width2) %>%
+  rename(., SAMPLE1 = "hart_sample_id", TYPE1 = "variant_type", ID1 = "bkpt_from_id", PARID1 = "bkpt_to_id", 
+         seqnames1 = "chr_from", start1 = "chr_from_bkpt", width1 = "chr_from_width", 
+         seqnames2 = "chr_to", start2 = "chr_to_bkpt", width2 = "chr_to_width") %>%
+  mutate(., "sv_id" = str_c(hart_sample_id, bkpt_from_id, bkpt_to_id, sep = "_"))
+
+# Variant types
+variant_types_orig <- c("BND", "DEL", "DUP", "INV", "SGL")
+variant_types_simple <- c("rearrangment", "deletion", "duplication", "inversion", "single-breakend")
+types_conv <- data.frame("orig" = variant_types_orig, "simple" = variant_types_simple)
+
+#' @BND = "Breakend"
+#' A BND record is not a 'translocation', it is an assertion that a breakpoint exists. 
+#' It represents discontinuity in the sample genome alignment with respect to the reference.
+#' more at: https://bioconductor.org/packages/devel/bioc/vignettes/StructuralVariantAnnotation/inst/doc/vignettes.html 
+#'
+#' @SGL = "Single breakend SV support" 
+#' (or "Single Gain-Loss"?)
+#' Single breakends (no 2nd bkpt present) are breakpoints in which only one side can be unambiguously determined. 
+#' The other end could be missing, unobserved, or located in an unknown part of the genome.
+
+# Filter entries for which no PARID (matched breakpoint) was found
+SVs_full <- SVs_full %>% dplyr::filter(., !is.na(bkpt_to_id))
+
+
+##
+
+
+# Read loops and enhancers
 loops <- read_tsv(path_loops)
 enh <- read_tsv(path_enhancers)
 
+cat("\n")
+print(paste0("--- Annotating SVs loops with resolution: ", loops_kb, " kb ----"))
+
 print("Types of structural variants:")
 print(table(SVs_full$variant_type))
-# Types are: 
-# "deletion", "inversion", "interchromosomal rearrangement - unknown type"
-# "intrachromosomal rearrangement with inverted orientation", "intrachromosomal rearrangement with non-inverted orientation"
-# "tandem duplication"
 
-## Simplify variant types (leaving out variant_type = "tandem duplication")
-variant_types_complex <- c("deletion", "inversion", "interchromosomal rearrangement - unknown type")
-variant_types_simple <- c("deletion", "inversion", "interchromosomal-translocation")
-types_conv <- data.frame("complex" = variant_types_complex, "simple" = variant_types_simple)
-
-SVs_full <- SVs_full %>% left_join(., types_conv, by = c("variant_type" = "complex")) %>% 
+SVs_full <- SVs_full %>% left_join(., types_conv, by = c("variant_type" = "orig")) %>% 
   rename(., "simple" = "variant_type_simple") %>% relocate(., variant_type_simple, .after = variant_type)
-SVs_full$chr_from <- paste0("chr", SVs_full$chr_from)
-SVs_full$chr_to <- paste0("chr", SVs_full$chr_to)
-# Reduce to useful columns
-SVs <- SVs_full[, 1:22] %>% dplyr::select(., -c(placement, interpreted_annotation, chr_from_flanking_seq, chr_to_flanking_seq))
+
+# Filter out SVs not useful
+SVs <- SVs_full %>% dplyr::filter(., !variant_type_simple %in% c("duplication", "single-breakend"))
 
 ## Define E - P regions to be intersected with SVs
 loops_enh_deg <- loops %>% dplyr::filter(., ( !is.na(name1) & !is.na(gene_name2) ) | 
@@ -93,7 +129,7 @@ loops_enh_deg_gr <- loops_enh_deg %>% makeGRangesFromDataFrame(., keep.extra.col
                                            seqnames.field = "EP_chrom", start.field = "EP_start", end.field = "EP_end")
 
 ## Annotate SVs
-print("All types: ") 
+print("Types of SVs to be annotated: ") 
 print(unique(SVs$variant_type_simple))
 
 SVs_annotated <- data.frame()
@@ -146,13 +182,13 @@ for(type in unique(SVs$variant_type_simple)){
     overlaps_from <- cbind(data.frame(df_from[queryHits(hits_from)]),
                            data.frame("unique_loop_id_from" = mcols(loops_enh_deg_gr[subjectHits(hits_from)])[, "unique_loop_id"]))
     overlaps_from <- overlaps_from %>% dplyr::rename(.,  "chr_from" = "seqnames", "chr_from_bkpt" = "start") %>% 
-      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_from, chr_from_bkpt), .before = chr_from_strand)    
+      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_from, chr_from_bkpt), .before = hart_sample_id)    
     
     hits_to <- findOverlaps(query=dels_to, subject=loops_enh_deg_gr)
     overlaps_to <- cbind(data.frame(dels_to[queryHits(hits_to)]),
                          data.frame("unique_loop_id_to" = mcols(loops_enh_deg_gr[subjectHits(hits_to)])[, "unique_loop_id"]))
     overlaps_to <- overlaps_to %>% dplyr::rename(.,  "chr_to" = "seqnames", "chr_to_bkpt" = "start") %>% 
-      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_to, chr_to_bkpt), .before = chr_to_strand)    
+      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_to, chr_to_bkpt), .before = hart_sample_id)    
     
     # full_join joins by all columns in common (only unique_loop_id_from/to is not in common)
     overlaps_join <- full_join(overlaps_from, overlaps_to, relationship = "many-to-many") %>% suppressMessages()
@@ -176,7 +212,7 @@ for(type in unique(SVs$variant_type_simple)){
     SVs_annotated <- rbind(SVs_annotated, overlaps_join)
   } 
   
-  else if(type == "interchromosomal-translocation"){
+  else if(type == "rearrangment"){
     trans <- SVs %>% dplyr::filter(., variant_type_simple == type)
     print(paste0("--- Annotating variants of type: ", type, " ---"))
     print(paste0("Total number of ", type, ": ", length(unique(trans$sv_id)) )) 
@@ -210,6 +246,15 @@ for(type in unique(SVs$variant_type_simple)){
     
     # Annotate SVs to loops and damaging effect 
     trans <- SVs %>% dplyr::filter(., variant_type_simple == type)
+    
+    # Not all rearrangments have both breakpoints, even though they have a ID and PARID
+    print("Filtering out rearrangments for which 1 bkpt is absent:")
+    trans <- trans %>% dplyr::filter(., !is.na(chr_to_bkpt) & !is.na(chr_from_bkpt))
+    print(paste0("New total number of ", type, " :", length(unique(trans$sv_id)) ))
+    
+    print("Are all rearrangments interchromosomal?")
+    print(sum(trans$chr_from == trans$chr_to) == 0)
+    
     trans_from <- makeGRangesFromDataFrame(trans, seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt", keep.extra.columns = T)
     trans_to <- makeGRangesFromDataFrame(trans, seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt", keep.extra.columns = T)
     df_from <- trans_from; df_to <- trans_to;
@@ -218,13 +263,13 @@ for(type in unique(SVs$variant_type_simple)){
     overlaps_from <- cbind(data.frame(df_from[queryHits(hits_from)]),
                            data.frame("unique_loop_id_from" = mcols(loops_enh_deg_gr[subjectHits(hits_from)])[, "unique_loop_id"]))
     overlaps_from <- overlaps_from %>% dplyr::rename(.,  "chr_from" = "seqnames", "chr_from_bkpt" = "start") %>% 
-      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_from, chr_from_bkpt), .before = chr_from_strand)    
+      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_from, chr_from_bkpt), .before = hart_sample_id)    
     
     hits_to <- findOverlaps(query=df_to, subject=loops_enh_deg_gr) %>% suppressWarnings() 
     overlaps_to <- cbind(data.frame(df_to[queryHits(hits_to)]),
                          data.frame("unique_loop_id_to" = mcols(loops_enh_deg_gr[subjectHits(hits_to)])[, "unique_loop_id"]))
     overlaps_to <- overlaps_to %>% dplyr::rename(.,  "chr_to" = "seqnames", "chr_to_bkpt" = "start") %>% 
-      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_to, chr_to_bkpt), .before = chr_to_strand) 
+      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_to, chr_to_bkpt), .before = hart_sample_id) 
     
     # full_join joins by all columns in common (only unique_loop_id_from/to is not in common)
     overlaps_join <- full_join(overlaps_from, overlaps_to, relationship = "many-to-many") %>% suppressMessages()
@@ -233,8 +278,8 @@ for(type in unique(SVs$variant_type_simple)){
     # All translocations within overlaps_join should be damaging
     dam_vec <- is.na(overlaps_join$unique_loop_id_from) & is.na(overlaps_join$unique_loop_id_to)
     if(sum(dam_vec) == 0){
-      print("- All interchromosomal translocations overlapping a loop are damaging -")
-      print(paste0("Damaging interchromosomal-translocations: ", length(unique(overlaps_join$sv_id)), " over ", length(unique(overlaps_join$sv_id)), 
+      print("- All rearrangments overlapping a loop are damaging -")
+      print(paste0("Damaging rearrangments: ", length(unique(overlaps_join$sv_id)), " over ", length(unique(overlaps_join$sv_id)), 
                    " (", round( length(unique(overlaps_join$sv_id)) / length(unique(overlaps_join$sv_id)), 2)*100, "%)"))
       cat("\n")
       
@@ -253,6 +298,11 @@ for(type in unique(SVs$variant_type_simple)){
     print(paste0("--- Annotating variants of type: ", type, " ---"))
     print(paste0("Total number of ", type, ": ", length(unique(invs$sv_id)) )) 
     
+    # Not all rearrangments have both breakpoints, even though they have a ID and PARID
+    print("Filtering out inversions for which 1 bkpt is absent:")
+    invs <- invs %>% dplyr::filter(., !is.na(chr_to_bkpt) & !is.na(chr_from_bkpt))
+    print(paste0("New total number of ", type, " :", length(unique(invs$sv_id)) ))
+    
     # Check whether bkpt 1 and bkpt 2 of overlap with one E - P region
     invs_from <- makeGRangesFromDataFrame(invs, seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt", keep.extra.columns = T)
     invs_to <- makeGRangesFromDataFrame(invs, seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt", keep.extra.columns = T)
@@ -264,13 +314,13 @@ for(type in unique(SVs$variant_type_simple)){
     overlaps_from <- cbind(data.frame(df_from[queryHits(hits_from)]),
                            data.frame("unique_loop_id_from" = mcols(loops_enh_deg_gr[subjectHits(hits_from)])[, "unique_loop_id"]))
     overlaps_from <- overlaps_from %>% dplyr::rename(.,  "chr_from" = "seqnames", "chr_from_bkpt" = "start") %>% 
-      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_from, chr_from_bkpt), .before = chr_from_strand)    
+      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_from, chr_from_bkpt), .before = hart_sample_id)    
     
     hits_to <- findOverlaps(query=df_to, subject=loops_enh_deg_gr) %>% suppressWarnings() 
     overlaps_to <- cbind(data.frame(df_to[queryHits(hits_to)]),
                          data.frame("unique_loop_id_to" = mcols(loops_enh_deg_gr[subjectHits(hits_to)])[, "unique_loop_id"]))
     overlaps_to <- overlaps_to %>% dplyr::rename(.,  "chr_to" = "seqnames", "chr_to_bkpt" = "start") %>% 
-      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_to, chr_to_bkpt), .before = chr_to_strand) 
+      dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_to, chr_to_bkpt), .before = hart_sample_id) 
     
     # full_join joins by all columns in common (only unique_loop_id_from/to is not in common)
     overlaps_join <- full_join(overlaps_from, overlaps_to, relationship = "many-to-many") %>% suppressMessages()
@@ -381,6 +431,9 @@ if(save_SVs_anno == T){
 
 ##
 
+})
+
+##
 
 #' @NOTES: 
 #' 
