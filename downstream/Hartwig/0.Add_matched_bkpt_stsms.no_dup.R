@@ -55,7 +55,20 @@ print(sum(duplicated(stsms_all$PARID)))
 
 # Add 2nd bkpt to SVS
 STSMs_all_new <- data.frame()
+i_to_skip <- c()
 for(i in 1:dim(stsms_all)[1]){
+  print(i)
+  
+  # Avoid considering rows already checked
+  if(i %in% i_to_skip){
+    next
+  }
+  
+  # Avoid considering empty rows 
+  if( sum(!is.na(stsms_all[i, ])) == 0 ){
+    next
+  }
+  
   row_1 <- stsms_all[i, ] # contains ID and PARID
   
   # PARID might be not indicated
@@ -67,12 +80,13 @@ for(i in 1:dim(stsms_all)[1]){
     
     STSMs_all_new <- rbind(STSMs_all_new, connected_rows)
   } 
-  
   else {
     # Extract row containing the PARID bkpt 
-    row_2 <- stsms_all[ (stsms_all$ID == row_1$PARID) , ]
+    # Extract only the PARID row where TYPE and SAMPLE of row_1 and row_2 match
+    row_2 <- stsms_all[ (stsms_all$ID == row_1$PARID & stsms_all$TYPE == row_1$TYPE & stsms_all$SAMPLE == row_1$SAMPLE) , ]
+    row_2_i <- which(stsms_all$ID == row_1$PARID & stsms_all$TYPE == row_1$TYPE & stsms_all$SAMPLE == row_1$SAMPLE)
     
-    # PARID might be not present in the datset (maybe filtered out)
+    # PARID might be not present in the dataset (maybe filtered out)
     if(dim(row_2)[1] == 0){
       row_2 <- colnames(stsms_all)
       df <- data.frame(matrix(NA, nrow=1, ncol=length(row_2)))
@@ -81,16 +95,16 @@ for(i in 1:dim(stsms_all)[1]){
       
       STSMs_all_new <- rbind(STSMs_all_new, connected_rows)
     }
-    
-    # Or, PARID is present in the dataset, potentially multiple times
+    # Or, PARID is present in the dataset
     else {
-      # Extract only the PARID row where TYPE and SAMPLE of row_1 and row_2 match
-      row_2 <- row_2[ (row_2$TYPE == row_1$TYPE & row_2$SAMPLE == row_1$SAMPLE) , ]
+      # Since we are storing row_2 next to row_1 in the new dataset
+      # Store index of row_2 and avoid considering it again (creating duplicates)
+      i_to_skip <- c(i_to_skip, row_2_i)
       connected_rows <- cbind(row_1, row_2)
-      
-      STSMs_all_new <- rbind(STSMs_all_new, connected_rows)
     }
   }
+  
+  STSMs_all_new <- rbind(STSMs_all_new, connected_rows)
 }
 
 # Change colnames of final df
@@ -98,7 +112,7 @@ new_cols <- c(paste0(colnames(stsms_all), 1), paste0(colnames(stsms_all), 2))
 colnames(STSMs_all_new) <- new_cols
 
 if(save_output == T){
-  write_tsv(STSMs_all_new, fs::path(path_results, "Hartwig_all_stsms_info.with_matched_bkpts.tsv"))
+  write_tsv(STSMs_all_new, fs::path(path_results, "Hartwig_all_stsms_info.with_matched_bkpts.no_dup.tsv"))
 }
 
 
