@@ -11,7 +11,6 @@ library(tidyverse)
 SEED <- 4321
 set.seed(SEED)
 save_tables <- F
-#source("./Desktop/enhancers_project/Analyses/loops/loops_functions.R")
 location <- "local" # 'local' or 'hpc'
 
 ### Loops Table - Method 1 ###
