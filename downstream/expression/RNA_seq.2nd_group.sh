@@ -12,7 +12,7 @@ source ~/.bashrc
 mamba activate nf_env
 
 IN_DIR='/hpcnfs/scratch/PGP/ebugani/expression/data/fasterq_2nd_group/'
-OUT_DIR='/hpcnfs/scratch/PGP/ebugani/expression/results_2nd_group/'
+OUT_DIR='/hpcnfs/scratch/PGP/ebugani/expression/results/results_2nd_group/'
 
 cd $IN_DIR
 
