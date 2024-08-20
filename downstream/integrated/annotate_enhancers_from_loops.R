@@ -9,8 +9,9 @@ save_output <- T
 location <- "local" # 'local' or 'hpc'
 
 path_loops <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/", set)
+
 if(location == "hpc"){
-  path_loops <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/NEW/", set)
+  path_loops <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/NEW/")
 }
                              
 
