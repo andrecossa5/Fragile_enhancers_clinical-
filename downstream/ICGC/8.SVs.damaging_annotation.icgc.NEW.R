@@ -15,7 +15,7 @@ library(assertthat)
 SEED <- 4321
 set.seed(SEED)
 
-#MARKERS <- c("CtIP", "GRHL")
+location <- "local" # 'local' or 'hpc'
 marker <- "GRHL"
 WIN <- 3000 # enhancers window that was used to compute overlap with SVs
 loops_kb <- 4
@@ -26,6 +26,13 @@ path_SVs <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/geno
 path_loops <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/NEW/", loops_kb, "kb/data/tables/", loops_kb, "kb_Unified_table.SCR_plus_KD_counts.all_anno_loops.ENH_DEGs_any.tsv"))
 path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/GRHL_enh.hq_signal.clustered.tsv")
 path_results_data <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/NEW/damaging_variants_annotation/SVs/")  
+
+if(location == "hpc"){
+  path_SVs <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/genomics/raw_ICGC/structural_somatic_mutation.tsv")
+  path_loops <- fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/", loops_kb, "kb/data/", loops_kb, "kb_Unified_table.SCR_plus_KD_counts.all_anno_loops.ENH_DEGs_any.tsv"))
+  path_enhancers <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/GRHL_enh.hq_signal.clustered.tsv")
+  path_results_data <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/NEW/damaging_variants_annotation/SVs/")  
+}
 
                               
 ##

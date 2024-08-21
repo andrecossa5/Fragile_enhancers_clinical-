@@ -6,12 +6,19 @@ library(tidyverse)
 SEED <- 4321
 set.seed(SEED)
 
+location <- "local" # 'local' or 'hpc'
 marker <- "GRHL" # Loops annotated wrt GRHL2 and not CtIP
 loops_kb <- 2
 
 path_variants_anno <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/NEW/damaging_variants_annotation/SVs/Table_SVs_loops_GRHL.all_overlaps.", loops_kb, "kb_res.with_damaging_anno.tsv"))  
 path_anno_ehnacers <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/NEW/", loops_kb, "kb/data/anno_enhancers/", loops_kb, "kb_GRHL2_enhancers.from_SCR_specific_loops.linked_to_DOWN_DEGs.tsv"))
 path_func_loops <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/NEW/", loops_kb, "kb/data/anno_enhancers/", loops_kb, "kb_functional_loops.aka_SCR_specific_loops_linked_to_DOWN_DEGs.tsv"))
+
+if(location == "hpc"){
+  path_variants_anno <- fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/NEW/damaging_variants_annotation/SVs/Table_SVs_loops_GRHL.all_overlaps.", loops_kb, "kb_res.with_damaging_anno.tsv"))  
+  path_anno_ehnacers <- fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/NEW/", loops_kb, "kb/data/anno_enhancers/", loops_kb, "kb_GRHL2_enhancers.from_SCR_specific_loops.linked_to_DOWN_DEGs.tsv"))
+  path_func_loops <- fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/NEW/", loops_kb, "kb/data/anno_enhancers/", loops_kb, "kb_functional_loops.aka_SCR_specific_loops_linked_to_DOWN_DEGs.tsv"))
+}
 
 
 ##
