@@ -32,7 +32,6 @@ WIN <- 1000
 MARKERS <- c("CtIP", "GRHL")
 motif_thresh <- 70 # score is typically expressed as a percentage of the maximum possible score for a match to the PWM. 
 save_anno <- T
-FIMO <- F
 
 
 ##
@@ -138,55 +137,6 @@ for(marker in MARKERS){
   print(paste0("Motif match threshold used: ", motif_thresh, " %. For window: ", WIN))
   print(paste0("Fraction of ", marker, " enhancers with a GRHL2 motif within: ", n_enh_motif, " / ", n_enh_tot, 
                " - ~", round(n_enh_motif / n_enh_tot * 100), "%"))
-}
-
-
-##
-
-
-if(FIMO == T){
-  
-## FIMO could also be used for motif matching 
-# Web tool: https://meme-suite.org/meme/tools/fimo 
-# Prepare input for the tool
-
-# Input fasta files 
-seqs_ctip <- getSeq(BSgenome.Hsapiens.UCSC.hg19, enh_gr[["CtIP"]])
-names(seqs_ctip) <- paste0("sequence", seq_along(seqs_ctip))
-seqs_names_conv_ctip <- data.frame("seq_name" = names(seqs_ctip), 
-                                   "name" = mcols(enh_gr$CtIP)$name_enh)
-
-seqs_grhl <- getSeq(BSgenome.Hsapiens.UCSC.hg19, enh_gr[["GRHL"]])
-names(seqs_grhl) <- paste0("sequence", seq_along(seqs_grhl))
-seqs_names_conv_grhl <- data.frame("seq_name" = names(seqs_grhl), 
-                                   "name" = mcols(enh_gr$GRHL)$name_enh)
-
-writeXStringSet(seqs_ctip, filepath = fs::path(path_results, "CtIP_enhancer_regions.WIN_1000.fasta"))
-writeXStringSet(seqs_grhl, filepath = fs::path(path_results, "GRHL_enhancer_regions.WIN_1000.fasta"))
-
-# Motif in MEME format is also needed
-# This can be downloaded from: https://jaspar2020.genereg.net/matrix/MA1105.2/ 
-
-# Read FIMO results - table contains duplicated sequences 
-seqs_names_conv <- list("CtIP" = seqs_names_conv_ctip, "GRHL" = seqs_names_conv_grhl)
-for(marker in MARKERS[2]){
-  fimo_results <- read_tsv(fs::path(path_results, paste0("FIMO_Results_info_files.", marker, "_enhancers/fimo.tsv")), comment = "#") %>% suppressMessages()
-  fimo_results <- fimo_results[!duplicated(fimo_results),] %>% 
-    left_join(., seqs_names_conv[[marker]], by = c("sequence_name" = "seq_name")) %>%
-    dplyr::select(., -sequence_name) %>%
-    dplyr::filter(., !duplicated(.))
-  
-  sum(!fimo_results$`p-value` < 0.01) # Only significant matches are returned - in terms of p-value
-  sum(fimo_results$`q-value` < 0.05) # However, no significant q-value
-  
-  # Print some info
-  n_enh_tot <- length(unique(enh_SSMs[[marker]]$name_enh))
-  n_enh_motif <- length(unique(fimo_results$name))
-  cat("\n")
-  print("--- Motif scanning results from FIMO ---")
-  print(paste0("Fraction of ", marker, " enhancers with a GRHL2 motif within: ", n_enh_motif, " / ", n_enh_tot, " - ~", 
-               round(n_enh_motif / n_enh_tot * 100), "%"))
-}
 }
 
 
