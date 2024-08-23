@@ -16,6 +16,7 @@ location <- "local" # 'local' or 'hpc'
 ### Loops Table - Method 1 ###
 kb <- 2
 
+# Define file paths for different data sources
 path_hichip <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/HiChip/filtered_loops/")
 path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/")
 path_enhancers_ctip <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/CtIP_enh.hq_signal.clustered.tsv")
@@ -23,11 +24,13 @@ path_enhancers_grhl <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinica
 path_tss <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/others/TSSs_elisa/TSSs_from_USCS_hg19_EMSEMBL.tsv")
 path_degs <- fs::path("/Users/ieo6983/Desktop/expression/DEGs/Df_DEGs.df_LFC_sig.padj_0.05.log2FC_1.Up_and_Down.tsv")
 
+# Define paths for results storage
 path_results <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/NEW/", kb, "kb"))
 path_results_tables <- fs::path( paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/NEW/", kb, "kb", "/data/tables/"))
 if(!dir.exists(path_results)){dir.create(path_results, recursive = T)}
 if(!dir.exists(path_results_tables)){dir.create(path_results_tables, recursive = T)}
 
+# If running on HPC, update paths accordingly
 if(location == "hpc"){
   path_hichip <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/HiChip/filtered_loops/")
   path_enhancers <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/")
@@ -67,6 +70,8 @@ find_loops_overlapping_enhancers <- function(enhancers_file,
   enhancers_gr <- makeGRangesFromDataFrame(enhancers_file, keep.extra.columns = T)
   loops_bin1 <- loops_file[, endsWith(colnames(loops_file), "1")]
   loops_bin2 <- loops_file[, endsWith(colnames(loops_file), "2")]
+  
+  # Extract column names for loop bins and create GRanges objects
   cols <- colnames(loops_bin1)
   loops_bin1_gr <- makeGRangesFromDataFrame(loops_bin1, seqnames.field = cols[1], 
                                             start.field = cols[2], end.field = cols[3])
@@ -93,22 +98,24 @@ find_loops_overlapping_enhancers <- function(enhancers_file,
   start(loops_bin2_gr) <- start(loops_bin2_gr) - (bin_len_kb*1000*ext_nbins)
   end(loops_bin2_gr) <- end(loops_bin2_gr) + (bin_len_kb*1000*ext_nbins)
   
-  # Find overlaps 
-  #bin1
+  # Find overlaps between loop bins and enhancers
+  # For loop bins 1
   ovrlp_bin1 <- findOverlaps(loops_bin1_gr, enhancers_gr, select = "first")
   enh_1 <- enhancers_file[ovrlp_bin1, c("name", "cluster")]
   colnames(enh_1) <- paste0(colnames(enh_1), 1)
   loops_bin1_ovrlp <- cbind(loops_bin1, enh_1) # GRanges are extended, but df remains as originally
-  #bin2
+  
+  # For loop bins 2
   ovrlp_bin2 <- findOverlaps(loops_bin2_gr, enhancers_gr, select = "first")
   enh_2 <- enhancers_file[ovrlp_bin2, c("name", "cluster")]
   colnames(enh_2) <- paste0(colnames(enh_2), 2)
   loops_bin2_ovrlp <- cbind(loops_bin2, enh_2) # GRanges are extended, but df remains as originally
-  #joined
+  
+  # Combine results for both bins
   loops_ovrlp <- cbind(loops_bin1_ovrlp, loops_bin2_ovrlp) %>%
     relocate(., c(name1,cluster1), .after = end2)
   
-  # Added to keep counts and FDR information for each loop
+  # Add counts and FDR information for each loop
   loops_ovrlp <- cbind(loops_ovrlp, loops_file[,c("counts","qvalue")])
   
   return(loops_ovrlp)
@@ -116,31 +123,40 @@ find_loops_overlapping_enhancers <- function(enhancers_file,
 
 #' Filter loops overlapping with DEGs, modified
 #' 
-#' This function ...
+#' This function identifies and filters loops that overlap with the transcription start sites (TSSs) of differentially expressed genes (DEGs).
+#' It annotates these loops with additional DEG information.
 #' 
-#' @param name description
+#' @param DEGs_tss_file File containing DEGs TSS coordinates and associated DEG information. 
+#'   Expected columns: gene_name, chrom, tss, DE, log2FoldChange, padj, pos_tss
+#' @param loops_enh_file File with loop coordinates and information on overlapping enhancers.
+#'   Expected columns: 'seqnames1', 'start1', 'end1', 'seqnames2', 'start2', 'end2', name1, cluster1, etc.
+#' @param bin_len_kb Length of loop bins resulting from loop calling in kilobases (kb). For example, 4 kb.
+#' @param ext_nbins Number of bins to extend left/right around each loop bin. Overlaps are searched within this extended region.
 #' @examples
-#' # example code
-# DEGs_tss_file:   File with DEGs TSSs coordinates: 
-# loops_enh_file:   File with coordinates of loops, with info on overlapping enahncers: 'seqnames1', 'start1', 'end1', 'seqnames2', 'start2', 'end2', name1, cluster1, ...
-# bin_len_kb:       Length of loop bins resulting from loop calling in kb. I.e. 4, for 4 kb.
-# ext_nbins:        Number of bins left/right by which loop bin is extended. Overlaps are searched within the extended bin.
+#' # Example usage:
+#' filtered_loops <- find_additional_DEGS_overlap(DEGs_tss_file = degs_tss_data, loops_enh_file = loops_enh_data, bin_len_kb = 4, ext_nbins = 1)
 
 find_additional_DEGS_overlap <- function(DEGs_tss_file, 
                                          loops_enh_file, 
                                          bin_len_kb = 4,
                                          ext_nbins = 1){
   
+  # Prepare TSS data: set start and end to the TSS position
   tss_file <- DEGs_tss_file
-  # Create GRanges obj for TSSs
   tss_file$start <- tss_file$tss
   tss_file$end <- tss_file$tss
+  
+  # Select relevant columns from TSS data
   tss_file <- tss_file %>% dplyr::select(gene_name, chrom, tss, start, end, DE, log2FoldChange, padj, pos_tss)
+  
+  # Convert TSS data to GRanges object for overlap analysis
   tss_gr <- makeGRangesFromDataFrame(tss_file, keep.extra.columns = T, seqnames.field = "chrom")
   
-  # Create GRanges obj for loops_enh
+  # Prepare loop data: separate into two GRanges objects based on bin columns
   loops_bin1 <- loops_enh_file[, endsWith(colnames(loops_enh_file), "1")]
   loops_bin2 <- loops_enh_file[, endsWith(colnames(loops_enh_file), "2")]
+  
+  # Convert loop data to GRanges objects
   cols <- colnames(loops_bin1)
   loops_bin1_gr <- makeGRangesFromDataFrame(loops_bin1, seqnames.field = cols[1], 
                                             start.field = cols[2], end.field = cols[3])
@@ -149,32 +165,33 @@ find_additional_DEGS_overlap <- function(DEGs_tss_file,
                                             start.field = cols[2], end.field = cols[3])
   
   
-  # Extend loop bins of +/- n bins
+  # Extend loop bins by specified number of bins in both directions
   start(loops_bin1_gr) <- start(loops_bin1_gr) - (bin_len_kb*1000*ext_nbins)
   end(loops_bin1_gr) <- end(loops_bin1_gr) + (bin_len_kb*1000*ext_nbins)
   start(loops_bin2_gr) <- start(loops_bin2_gr) - (bin_len_kb*1000*ext_nbins)
   end(loops_bin2_gr) <- end(loops_bin2_gr) + (bin_len_kb*1000*ext_nbins)
   
-  # Find overlaps 
-  #bin1
+  # Find overlaps between loop bins and TSSs
+  # For loop bins 1
   ovrlp_bin1 <- findOverlaps(loops_bin1_gr, tss_gr, select = "first")
   tss_1 <- tss_file[ovrlp_bin1, c("gene_name", "DE", "log2FoldChange", "padj", "pos_tss")]
   colnames(tss_1) <- paste0(colnames(tss_1), 1)
-  loops_bin1_ovrlp <- cbind(loops_bin1, tss_1) # GRanges are extended, but df remains as originally
-  #bin2
+  loops_bin1_ovrlp <- cbind(loops_bin1, tss_1) # # Combine original loop data with TSS info. GRanges are extended, but df remains as originally
+  
+  # For loop bins 2
   ovrlp_bin2 <- findOverlaps(loops_bin2_gr, tss_gr, select = "first")
   tss_2 <- tss_file[ovrlp_bin2, c("gene_name", "DE", "log2FoldChange", "padj", "pos_tss")]
   colnames(tss_2) <- paste0(colnames(tss_2), 2)
-  loops_bin2_ovrlp <- cbind(loops_bin2, tss_2) # GRanges are extended, but df remains as originally
+  loops_bin2_ovrlp <- cbind(loops_bin2, tss_2) # Combine original loop data with TSS info. GRanges are extended, but df remains as originally
   
-  #joined
+  # Combine results from both bins into a single data frame
   loops_ovrlp <- cbind(loops_bin1_ovrlp, loops_bin2_ovrlp) %>% 
     relocate(., c(name1,cluster1,gene_name1, DE1, log2FoldChange1, padj1, pos_tss1), .after = end2)
   
-  # Added to keep counts and FDR information for each loop
+  # Add counts and FDR information from original loop data
   loops_ovrlp <- cbind(loops_ovrlp, loops_enh_file[,c("counts","qvalue")])
 
-  # Remove eventual duplicates
+  # Remove duplicate rows from the combined results
   message(sprintf("Removing %d duplicated loops", sum(duplicated(loops_ovrlp))))
   loops_ovrlp <- loops_ovrlp[!duplicated(loops_ovrlp), ]
   
@@ -182,25 +199,31 @@ find_additional_DEGS_overlap <- function(DEGs_tss_file,
 }
 
 
-#' Unbundle ambigously annotated bins 
+#' Unbundle ambiguously annotated bins 
 #' 
-#' This function ...
-#' @param name description
+#' This function resolves cases where bins are ambiguously annotated with multiple regions (enhancers and/or promoters).
+#' It creates distinct rows for each case of overlap, ensuring that no bin is ambiguously associated with multiple regions.
+#' 
+#' @param enh_degs_loops_file Data frame with loop information, including overlapping enhancers and DEGs' TSSs.
+#'   Expected columns: name1, gene_name1, name2, gene_name2, and additional columns related to DEG annotations.
 #' @examples
-#' # example code
+#' # Example usage:
+#' cleaned_loops <- unbundle_ambiguous_bins(enh_degs_loops_file = combined_loops_data)
   
 unbundle_ambiguous_bins <- function(enh_degs_loops_file){
   
-  # Count how many overlapping regions x bin
+  # Determine how many overlapping regions are associated with each bin
   n1 <- rowSums(!is.na(enh_degs_loops_file[, c("name1", "gene_name1")]))
-  cond_amb1 <- n1 > 1
+  cond_amb1 <- n1 > 1  # Condition where bin1 overlaps with more than one region
   n2 <- rowSums(!is.na(enh_degs_loops_file[, c("name2", "gene_name2")]))
-  cond_amb2 <- n2 > 1
+  cond_amb2 <- n2 > 1  # Condition where bin2 overlaps with more than one region
     
+  # Overall ambiguity condition for any bin
   cond_amb <- (n1 > 1 | n2 > 1)
   
-  df_not_amb <- enh_degs_loops_file[!cond_amb, ]
-  df_amb <- enh_degs_loops_file[cond_amb, ]
+  # Split the data into ambiguous and non-ambiguous bins
+  df_not_amb <- enh_degs_loops_file[!cond_amb, ]  # Bins that are not ambiguous
+  df_amb <- enh_degs_loops_file[cond_amb, ]      # Bins that are ambiguous
   message(sprintf("Check if size of df_amb and df_not_amb correspond to size of whole: %s", 
                   dim(df_not_amb)[1] + dim(df_amb)[1] == dim(enh_degs_loops_file)[1]))
   
@@ -210,19 +233,22 @@ unbundle_ambiguous_bins <- function(enh_degs_loops_file){
   df_amb$n_bin2 <- rowSums(!is.na(df_amb %>% dplyr::select(name2, gene_name2)))
   
   # Case 2-0/1: bin1 overlaps with both prom and enh; Case 0/1-2: bin2 overlaps with both prom and enh; Case 2-2: bin1 & 2 overlap with both prom and enh
+  
+  # Initialize a new data frame to hold the updated rows
   df_amb_new <- df_amb
   
   for(i in 1:dim(df_amb)[1]){
     r <- df_amb[i, ]
     
-    # If case 1, duplicate row separating prom and enh in bin2
+    # Case 2-0/1 or 0/1-2: Handle cases where bin1 or bin2 overlaps with both enhancer and promoter
+    # duplicate row separating prom and enh in bin
     if((r$n_bin1 == 1 & r$n_bin2 == 2) | (r$n_bin1 == 0 & r$n_bin2 == 2)){
       df_amb_new[i, ]$gene_name2 <- NA
       df_amb_new[i, c("DE2", "log2FoldChange2", "padj2", "pos_tss2")] <- NA
       
       r$name2 <- NA
       r$cluster2 <- NA
-      df_amb_new <- rbind(df_amb_new, r)
+      df_amb_new <- rbind(df_amb_new, r) # Add the duplicated row with adjustments
     }
     
     if((r$n_bin1 == 2 & r$n_bin2 == 1) | (r$n_bin1 == 2 & r$n_bin2 == 0)){
@@ -231,12 +257,14 @@ unbundle_ambiguous_bins <- function(enh_degs_loops_file){
       
       r$name1 <- NA
       r$cluster1 <- NA
-      df_amb_new <- rbind(df_amb_new, r)
+      df_amb_new <- rbind(df_amb_new, r) # Add the duplicated row with adjustments
     }
     
+    # Case 2-2: bin1 & 2 overlap with both prom and enh
     if(r$n_bin1 == 2 & r$n_bin2 == 2){
       r1 <- r; r2 <- r; r3 <- r
       
+      # Create three separate cases for the situation where both bins overlap with multiple regions
       df_amb_new[i, ]$gene_name1 <- NA; df_amb_new[i, ]$gene_name2 <- NA
       df_amb_new[i, c("DE1", "log2FoldChange1", "padj1", "pos_tss1")] <- NA; df_amb_new[i, c("DE2", "log2FoldChange2", "padj2", "pos_tss2")] <- NA
       
@@ -256,6 +284,7 @@ unbundle_ambiguous_bins <- function(enh_degs_loops_file){
     }
   }
   
+  # Verify the size of the new data frame matches expectations
   # Check if size of df_amb_new matches df_amb with duplicated rows
   check <- dim(df_amb)[1]*2
   check <- check + (dim(df_amb%>%filter(n_bin1==2&n_bin2==2))[1]*2)
@@ -266,7 +295,7 @@ unbundle_ambiguous_bins <- function(enh_degs_loops_file){
   df_amb_new$n_bin2 <- rowSums(!is.na(df_amb_new %>% dplyr::select(name2, gene_name2)))
   message(sprintf("No more ambiguous bins: %s", sum(c(df_amb_new$n_bin1, df_amb_new$n_bin2) > 1)==0))
   
-  # Re-join df_not_amb & df_amb
+  # Recombine non-ambiguous and newly processed ambiguous data
   df_amb_new$n_bin1 <- NULL; df_amb_new$n_bin2 <- NULL
   df_new <- rbind(df_not_amb, df_amb_new)
   
@@ -277,22 +306,23 @@ unbundle_ambiguous_bins <- function(enh_degs_loops_file){
 ##
 
 
-# Read loops
+# Read loops data from SCR and KD conditions
 scr <- read_tsv(fs::path(path_hichip, 'SCR', sprintf('SCR_loops_%s_kb.tsv', kb)))
 kd <- read_tsv(fs::path(path_hichip, 'KD', sprintf('KD_loops_%s_kb.tsv', kb)))
 
-# SCR
+# SCR-specific loops: Loops that are present in SCR but not in KD
 scr_specific <- anti_join(scr, kd, by = c('seqnames1', 'start1', 'end1', 'seqnames2', 'start2', 'end2'))
 
-# KD
+# KD-specific loops: Loops that are present in KD but not in SCR
 kd_specific <- anti_join(kd, scr, by = c('seqnames1', 'start1', 'end1', 'seqnames2', 'start2', 'end2'))
 
-# Common
+# Common loops: Loops that are present in both SCR and KD
 common <- inner_join(scr, kd, by = c('seqnames1', 'start1', 'end1', 'seqnames2', 'start2', 'end2'))
 
+# Print dimensions and checks to ensure consistency
 dim(common); dim(scr_specific); dim(kd_specific)
-dim(common)[1]+dim(scr_specific)[1] == dim(scr)[1]
-dim(common)[1]+dim(kd_specific)[1] == dim(kd)[1]
+dim(common)[1] + dim(scr_specific)[1] == dim(scr)[1]  # Check total size matches original SCR data
+dim(common)[1] + dim(kd_specific)[1] == dim(kd)[1]    # Check total size matches original KD data
 
 
 ##
@@ -302,19 +332,19 @@ dim(common)[1]+dim(kd_specific)[1] == dim(kd)[1]
 columns_names <- c("chrom", "start", "end", "name", "summit", "cluster")
 enh_grhl2 <- read_tsv(path_enhancers_grhl)
 
-# change enhancers name  
+# Modify enhancer names: prepend 'chr' to chromosome names and create a new name field
 enh_grhl2$chrom <- paste0("chr", enh_grhl2$chrom)
 enh_grhl2$name <- str_c(enh_grhl2$chrom, enh_grhl2$summit, sep=":")
 
-# SCR
+# Find overlaps of SCR loops with GRHL2-bound enhancers
 scr_enh_overlaps <- find_loops_overlapping_enhancers(enhancers_file = enh_grhl2, loops_file = scr, 
                                                      bin_len_kb = kb, ext_nbins = 1)
 
-# KD 
+# Find overlaps of KD loops with GRHL2-bound enhancers
 kd_enh_overlaps <- find_loops_overlapping_enhancers(enhancers_file = enh_grhl2, loops_file = kd, 
                                                     bin_len_kb = kb, ext_nbins = 1)
 
-# Loops involving at least 1 GRHL2-bound enhancer (either bin1 or bin2)
+# Filter loops that involve at least one GRHL2-bound enhancer (either bin1 or bin2)
 scr_enh <- scr_enh_overlaps %>% dplyr::filter(., !is.na(name1) | !is.na(name2))
 kd_enh <- kd_enh_overlaps %>% dplyr::filter(., !is.na(name1) | !is.na(name2))
 
@@ -324,29 +354,29 @@ kd_enh <- kd_enh_overlaps %>% dplyr::filter(., !is.na(name1) | !is.na(name2))
 
 ## DEGs Promoters overlap 
 
-# Read TSSs
+# Read TSSs and DEGs data
 TSSs <- read_tsv(path_tss)
 DEGs <- read_tsv(path_degs)
 
-# All DEGs are present in TSS file
+# Check if all DEGs are present in the TSS file
 sum(!toupper(DEGs$gene_id) %in% toupper(TSSs$gene_id))
 
-# Add TSSs to DEGs
+# Merge TSSs information with DEGs
 DEGs_tss <- left_join(DEGs, TSSs[,c(1:2,4)], by = "gene_id")
 DEGs_tss$pos_tss <- str_c(DEGs_tss$chrom, DEGs_tss$tss, sep=":")
 
-# Multiple TSSs for each gene
+# Count the number of TSSs per gene
 n_tss <- DEGs_tss %>% group_by(gene_id) %>%
   summarise(n_tss = length(unique(tss)))
 table(n_tss$n_tss)
-# Keep all. When assigninng to loops, tss information is lost and only gene_name remains. Remove duplicates later.
+# Note: All TSSs are kept; duplicates will be removed later when assigning to loops
 
-# No ambiguous gene names
+# Check for ambiguous gene names
 n_ids <- DEGs_tss %>% group_by(gene_id) %>%
   summarise(n_ids = length(unique(gene_name)))
 table(n_ids$n_ids)
 
-# Find promoter overlaps
+# Find overlaps between DEGs and loops involving GRHL2-bound enhancers
 scr_enh_degs <- find_additional_DEGS_overlap(DEGs_tss_file = DEGs_tss, loops_enh_file = scr_enh, bin_len_kb = kb)
 kd_enh_degs <- find_additional_DEGS_overlap(DEGs_tss_file = DEGs_tss, loops_enh_file = kd_enh, bin_len_kb = kb)
 
@@ -354,10 +384,11 @@ kd_enh_degs <- find_additional_DEGS_overlap(DEGs_tss_file = DEGs_tss, loops_enh_
 ##
 
 
+# Unbundle ambiguous bins in SCR and KD DEGs data
 scr_enh_degs_unb <- unbundle_ambiguous_bins(scr_enh_degs)
 kd_enh_degs_unb <- unbundle_ambiguous_bins(kd_enh_degs)
 
-# Check new sizes
+# Check dimensions of unbundled data
 dim(scr_enh_degs); dim(scr_enh_degs_unb)
 dim(kd_enh_degs); dim(kd_enh_degs_unb)
 
@@ -365,28 +396,29 @@ dim(kd_enh_degs); dim(kd_enh_degs_unb)
 ##
 
 
-# Unique table 
+# Identify unique tables by joining with specific loops
 scr_enh_degs_spec <- inner_join(scr_enh_degs, scr_specific, by = c('seqnames1', 'start1', 'end1', 'seqnames2', 'start2', 'end2'))
 kd_enh_degs_spec <- inner_join(kd_enh_degs, kd_specific, by = c('seqnames1', 'start1', 'end1', 'seqnames2', 'start2', 'end2'))
 enh_degs_common <- inner_join(scr_enh_degs, kd_enh_degs, by = c('seqnames1', 'start1', 'end1', 'seqnames2', 'start2', 'end2'))
-  
+
+# Print dimensions and check consistency
 dim(scr_enh_degs_spec); dim(kd_enh_degs_spec); dim(enh_degs_common)
 dim(scr_enh_degs_spec)[1] + dim(enh_degs_common)[1] == dim(scr_enh_degs)[1]
 dim(kd_enh_degs_spec)[1] + dim(enh_degs_common)[1] == dim(kd_enh_degs)[1]
 
-# Merge the two sets of enhancers into one table only
+# Combine SCR and KD data into a unified table
 uni_enh_degs <- full_join(scr_enh_degs, kd_enh_degs, 
                           by = colnames(scr_enh_degs)[1:20], 
                           suffix = c(".scr", ".kd"))
 
-# Do sizes correspond?
+# Verify that the sizes correspond to the expected counts
 dim(scr_enh_degs_spec)[1] + dim(kd_enh_degs_spec)[1] + dim(enh_degs_common)[1] == dim(uni_enh_degs)[1]
 
 
 ##
 
 
-# Save tables
+# Save the results to files if the flag is set
 if(save_tables == T){
   scr_enh_degs %>% write_tsv(., fs::path(path_results_tables, paste0(kb, "kb_SCR.all_anno_loops.ENH_DEGs_any.tsv")))
   scr_enh_degs_unb %>% write_tsv(., fs::path(path_results_tables, paste0(kb, "kb_SCR.all_anno_loops.ENH_DEGs_any.unbundled.tsv")))
