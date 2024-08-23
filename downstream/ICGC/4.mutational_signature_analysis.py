@@ -1,9 +1,9 @@
 
 import pandas as pd
 import matplotlib.pyplot as plt
-from SigProfilerMatrixGenerator.scripts import SigProfilerMatrixGeneratorFunc as matGen # matrix generation
-from SigProfilerAssignment import Analyzer as Analyze # signature analysis
-import sigProfilerPlotting as sigPlt # signatures plots
+from SigProfilerMatrixGenerator.scripts import SigProfilerMatrixGeneratorFunc as matGen # Matrix generation for mutational signatures
+from SigProfilerAssignment import Analyzer as Analyze # Signature analysis
+import sigProfilerPlotting as sigPlt # Plotting for mutational signatures
 import glob
 import os
 
@@ -11,13 +11,16 @@ import os
 #from SigProfilerMatrixGenerator import install as genInstall
 #genInstall.install('GRCh37', bash=True)
 
+# Parameters
 WIN = 1
 UNIT = "kb"
 MARKER = "CtIP" # or GRHL2
 
+# ANNOTATION: Options for different analyses 
 ANALYSIS = "stratified"
 GROUP = "BRCA_D"
 
+# Define paths 
 IN_FOLDER = "/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/enhancers_SSMs_overlaps/data/"
 if ANALYSIS == "stratified":
     OUT_FOLDER = "/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/{}.mutational_signature_analysis.{}{}_WIN.{}/".format(MARKER, WIN, UNIT, GROUP)    
@@ -50,7 +53,7 @@ clusters = {
 ##
 
 
-# Generate mutational matrices 
+# Loop through each cluster group and generate mutational matrices 
 for label in clusters[MARKER].keys():
     print(label)
 

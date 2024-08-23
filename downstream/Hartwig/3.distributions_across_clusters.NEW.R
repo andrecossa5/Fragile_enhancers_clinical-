@@ -1,58 +1,64 @@
 
 suppressMessages({
   
+library(tidyverse)  # Load the tidyverse package for data manipulation and visualization
+library(ggplot2)    # Load ggplot2 for creating plots
+library(ggpubr)     # Load ggpubr for easy publication-ready plots
+source("/hpcnfs/scratch/PGP/Ciacci_et_al/fragile_enhancer_clinical/utils/functions_genomics.R")  # Source external functions
 
-library(tidyverse)
-library(ggplot2)
-library(ggpubr)
-source("/hpcnfs/scratch/PGP/Ciacci_et_al/fragile_enhancer_clinical/utils/functions_genomics.R")
-
+# Set seed for reproducibility
 SEED <- 4321
 set.seed(SEED)
 
-MARKERS <- c("CtIP", "GRHL")
-SOURCES <- c("hart", "icgc")
-anno_only <- F
-label <- "all_enhancers"
-add_control_AF <- T 
+# Define markers and sources
+MARKERS <- c("CtIP", "GRHL")   # Markers to analyze
+SOURCES <- c("hart", "icgc")   # Data sources
+anno_only <- FALSE             # Flag to filter only annotated enhancers
+label <- "all_enhancers"       # Label for plots
+add_control_AF <- TRUE         # Flag to add control AF data
 
-path_add_control <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/bin/AF_distribution_random_control.R")
-path_anno_enhancers <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/annotated_enhancers/NEW/")
+# Paths for files
+path_add_control <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/bin/AF_distribution_random_control.R")  # Path to control AF script
+path_anno_enhancers <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/annotated_enhancers/NEW/")  # Path to annotated enhancers
+path_results_plots <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/NEW/plots/")  # Path to save result plots
+path_results_data <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/NEW/data/")  # Path to save result data
+
+# Load distance data from different sources and markers
 hart.ctip.dist <- read_tsv("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/NEW/data/distances.snvs_distribution_over_enhancers.CtIP.all_clusters.all_enhancers.tsv")
 hart.grhl.dist <- read_tsv("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/NEW/data/distances.snvs_distribution_over_enhancers.GRHL.all_clusters.all_enhancers.tsv")
 icgc.ctip.dist <- read_tsv("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/enhancers_SSMs_overlaps/NEW/data/distances.snvs_distribution_over_enhancers.CtIP.all_clusters.all_enhancers.with_AFs.tsv")
 icgc.grhl.dist <- read_tsv("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/enhancers_SSMs_overlaps/NEW/data/distances.snvs_distribution_over_enhancers.GRHL.all_clusters.all_enhancers.with_AFs.tsv")
 annotated_enhancers <- read_tsv(fs::path(path_anno_enhancers, "2kb_GRHL2_enhancers.from_SCR_specific_loops.linked_to_DOWN_DEGs.tsv")) %>% suppressMessages()
 
-path_results_plots <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/NEW/plots/")
-path_results_data <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/NEW/data/")
+# Define file names for output plots
+file_name1 <- fs::path(path_results_plots, "Rplots.3.distributions_across_clusters.pdf")
+file_name2 <- fs::path(path_results_plots, "Rplots.3.distributions_across_clusters.part_2.pdf")
 
-# Name of pdf files with plots
-file_name1 <- fs::path(path_results_plots, paste0("Rplots.3.distributions_across_clusters.pdf")) 
-file_name2 <- fs::path(path_results_plots, paste0("Rplots.3.distributions_across_clusters.part_2.pdf")) 
-
-if(anno_only == T){
+# Adjust file names and filter data if only annotated enhancers are used
+if (anno_only) {
   label <- "only_annotated_ehancers_GRHL2"
   hart.grhl.dist <- hart.grhl.dist %>% filter(name %in% annotated_enhancers$name)
   icgc.grhl.dist <- icgc.grhl.dist %>% filter(name %in% annotated_enhancers$name)
-  file_name1 <- fs::path(path_results_plots, paste0("Rplots.3.distributions_across_clusters.anno_only.pdf")) 
-  file_name2 <- fs::path(path_results_plots, paste0("Rplots.3.distributions_across_clusters.part_2.anno_only.pdf")) 
+  file_name1 <- fs::path(path_results_plots, "Rplots.3.distributions_across_clusters.anno_only.pdf")
+  file_name2 <- fs::path(path_results_plots, "Rplots.3.distributions_across_clusters.part_2.anno_only.pdf")
 }
 
-all_dfs <- list("CtIP" = list("hart" = hart.ctip.dist, "icgc" = icgc.ctip.dist), 
-                "GRHL" = list("hart" = hart.grhl.dist, "icgc" = icgc.grhl.dist))
+# Organize data into a list for each marker and source
+all_dfs <- list(
+  "CtIP" = list("hart" = hart.ctip.dist, "icgc" = icgc.ctip.dist), 
+  "GRHL" = list("hart" = hart.grhl.dist, "icgc" = icgc.grhl.dist)
+)
 
 
 ##
 
+# Open PDF device to save plots
 pdf(file_name1, width = 11, height = 7)
 
 ## 
 
 
-max_length <- max(sapply(list(hart.ctip.dist, hart.grhl.dist, icgc.ctip.dist, icgc.grhl.dist), function(x){dim(x)[1]}))
-
-# Densities hartwig vs. icgc - ALL enhancers
+# Combine data into a single data frame for density plots
 df_full <- data.frame(
   "hart.ctip" = c(hart.ctip.dist$dist, rep(NA, max_length-dim(hart.ctip.dist)[1])), 
   "hart.grhl" = c(hart.grhl.dist$dist, rep(NA, max_length-dim(hart.grhl.dist)[1])),
@@ -60,10 +66,14 @@ df_full <- data.frame(
   "icgc.grhl" = c(icgc.grhl.dist$dist, rep(NA, max_length-dim(icgc.grhl.dist)[1]))
 )
 
+# Determine the maximum length across data frames for consistent plotting
+max_length <- max(sapply(list(hart.ctip.dist, hart.grhl.dist, icgc.ctip.dist, icgc.grhl.dist), function(x){dim(x)[1]}))
+
 
 ##
 
 
+# Create density plots for each marker
 for(marker in tolower(MARKERS)){
   df <- df_full[, endsWith(colnames(df_full), marker)]
   d <- df %>% pivot_longer(everything(), names_to = "source", values_to = "distances") %>%
@@ -79,16 +89,16 @@ for(marker in tolower(MARKERS)){
 ##
 
 
-# Define groups of clusters
+# Define clusters as high or low for each marker
 cluster_groups <- setNames(vector(mode="list", length=length(MARKERS)), MARKERS)
 cluster_groups$CtIP <- list(
   "high" = c("cluster_1", "cluster_2", "cluster_3", "cluster_4"), 
   "low" = c("cluster_5")
 )
-cluster_groups$GRHL <- cluster_groups$CtIP # clusters are equal
+cluster_groups$GRHL <- cluster_groups$CtIP # Clusters are the same for GRHL
 
 
-# x cluster high-low
+# Prepare data for high and low cluster density plots
 df_high <- data.frame(
   "hart.ctip" = c(hart.ctip.dist[hart.ctip.dist$cluster %in% cluster_groups$CtIP$high, ]$dist, rep(NA, max_length-dim(hart.ctip.dist[hart.ctip.dist$cluster %in% cluster_groups$CtIP$high, ])[1])), 
   "hart.grhl" = c(hart.grhl.dist[hart.grhl.dist$cluster %in% cluster_groups$GRHL$high, ]$dist, rep(NA, max_length-dim(hart.grhl.dist[hart.grhl.dist$cluster %in% cluster_groups$GRHL$high, ])[1])),
@@ -102,7 +112,7 @@ df_low <- data.frame(
   "icgc.grhl" = c(icgc.grhl.dist[icgc.grhl.dist$cluster %in% cluster_groups$GRHL$low, ]$dist, rep(NA, max_length-dim(icgc.grhl.dist[icgc.grhl.dist$cluster %in% cluster_groups$GRHL$low, ])[1]))
 )
 
-# High 
+# Plot densities for high clusters
 for(marker in tolower(MARKERS)){
   df <- df_high[, endsWith(colnames(df_high), marker)]
   d <- df %>% pivot_longer(everything(), names_to = "source", values_to = "distances") %>%
@@ -115,7 +125,7 @@ for(marker in tolower(MARKERS)){
 }
 
 
-# Low
+# Plot densities for low clusters
 for(marker in tolower(MARKERS)){
   df <- df_low[, endsWith(colnames(df_low), marker)]
   d <- df %>% pivot_longer(everything(), names_to = "source", values_to = "distances") %>%
@@ -127,41 +137,50 @@ for(marker in tolower(MARKERS)){
   print(d)
 }
 
+
 ##
 
 
 # Each cluster 
 
+# Initialize a list to store plots for each marker and cluster
 plot_list <- list(
   "CtIP" = setNames(vector(mode="list", length=length(unlist(cluster_groups[["CtIP"]]))), unlist(cluster_groups[["CtIP"]])),
   "GRHL" = setNames(vector(mode="list", length=length(unlist(cluster_groups[["GRHL"]]))), unlist(cluster_groups[["GRHL"]]))
 )
 
+# Loop through each marker
 for(marker in MARKERS){
-  clusts <- unlist(cluster_groups[[marker]])
+  clusts <- unlist(cluster_groups[[marker]])  # Get clusters for the current marker
   for(clust in clusts){
-    print(clust)
+    print(clust)  # Print cluster name
+    # Filter data for the current cluster and marker from different sources
     df1 <- all_dfs[[marker]][["hart"]] %>% filter(cluster == clust)
     df2 <- all_dfs[[marker]][["icgc"]] %>% filter(cluster == clust)
     
+    # Ensure both data frames have the same length
     max_length <- max(dim(df1)[1], dim(df2)[1])
     df <- data.frame("hart" = c(df1$dist, rep(NA, max_length-length(df1$dist))), 
                      "icgc" = c(df2$dist, rep(NA, max_length-length(df2$dist))))
     
+    # Plot density distributions for the current cluster and marker
     d <- df %>% pivot_longer(everything(), names_to = "source", values_to = "distances") %>%
-      ggplot(., aes(x=distances, group = source, color = source))+
-      geom_density(bw=100, alpha=0.1)+
-      theme_light()+
+      ggplot(., aes(x=distances, group = source, color = source)) +
+      geom_density(bw=100, alpha=0.1) +
+      theme_light() +
       labs(
         title = paste0(clust, " ", marker), 
         subtitle = label, 
-        x = "distance from summit", y = "")
+        x = "distance from summit", y = ""
+      )
     print(d)
     
+    # Save the plot to the list
     plot_list[[marker]][[clust]] <- d
-    }
+  }
 }
 
+# (Uncomment below section if needed)
 #for(marker in (MARKERS)){
   #cowplot::plot_grid("title", plotlist = plot_list[[marker]], ncol = 1) #%>%
     #ggsave(., filename = paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/Hartwig/snvs_distribution_over_enhancers/plots/density.snvs_distribution_over_enhancers.", marker,".each_cluster.hartwig_vs_icgc.", label, ".png"), device = "png", width = 7, height = 22)}
@@ -172,8 +191,9 @@ for(marker in MARKERS){
 
 ### ANALYSES on VAFs ###
 
-WIN <- 100
+WIN <- 100  # Define window size for distance analysis
 
+# Initialize lists to store data
 df_dist_wins <- list(
   "CtIP" = list("hart", "icgc"), 
   "GRHL" = list("hart", "icgc")
@@ -190,20 +210,22 @@ df_n_muts_occ <- list(
 )
 
 
+# Loop through each source
 for(source in SOURCES){
   cat("\n")
-  print(paste0(" ----- ", source, " ----- "))
+  print(paste0(" ----- ", source, " ----- "))  # Print the source name
   print("Storing variants information")
   for(marker in MARKERS){
+    # Filter data within the specified window size
     df.dist.win <- all_dfs[[marker]][[source]] %>% filter(abs(dist) <= WIN)
     df_dist_wins[[marker]][[source]] <- df.dist.win
     
-    # Store number of SNVs x enhancer info
+    # Store the number of SNVs per enhancer
     n_muts_x_enh <- df.dist.win %>% group_by(., name) %>% summarise("n_muts_x_enh" = n())
     n_muts_x_enh <- left_join(n_muts_x_enh, df.dist.win[, c("cluster", "name")], by = "name")
     snvs_x_enh[[marker]][[source]] <- n_muts_x_enh
     
-    # Store number of occurrences x SNV info
+    # Store the number of occurrences of each SNV
     n_muts_occ <- df.dist.win %>% group_by(., ID) %>% summarise(n_muts_occ = n())
     df_n_muts_occ[[marker]][[source]] <- n_muts_occ
   }
@@ -211,13 +233,14 @@ for(source in SOURCES){
 
 
 # PLOTS
+# Loop through each source
 for(source in SOURCES){
   cat("\n")
-  print(paste0(" ----- ", source, " ----- "))
+  print(paste0(" ----- ", source, " ----- "))  # Print the source name
   for(marker in MARKERS){
     df.dist.win <- df_dist_wins[[marker]][[source]]
     
-    # Plot number of mutations x enhancer across donors
+    # Plot number of mutations per enhancer across donors
     sort(table(df.dist.win$name), decreasing = T) %>% 
       barplot(las=3, cex.names = 0.5, 
               main=paste0("Number of SNVs x ", marker ," enhancer across all ", source, " samples: ", WIN, " bp win"))
@@ -239,30 +262,30 @@ for(source in SOURCES){
     print(paste0("Number of SNVs with > 1 occ. in ", marker, " enhancers: ", length(up_1)))
     print(paste0("Number of SNVs with > 2 occ. in ", marker, " enhancers: ", length(up_2)))
     
-    # Merge info
+    # Merge information for further analysis
     n_muts_x_enh <- snvs_x_enh[[marker]][[source]]
     n_muts_occ <- df_n_muts_occ[[marker]][[source]]
     all_occurrences <- left_join(df.dist.win, n_muts_x_enh, by = "name") %>% 
       left_join(., n_muts_occ, by = "ID")
     
-    # Number of enhancers with SNVs with occurrence > ?
+    # Number of enhancers with SNVs having more than 2 occurrences
     n_enh <- length(unique(all_occurrences[all_occurrences$n_muts_x_enh > 2, ]$name))
     print(paste0("High-occurrence SNVs in ", source, " corresponding to ", n_enh, " ", marker, " enhancers"))
     cat("\n")
     
     # Plot AF distribution of SNVs in enhancers divided by number of occurrences    
     af <- all_occurrences %>%
-      ggplot(., aes(x = n_muts_occ, y = AF))+
-      geom_point()+
-      theme_light()+
+      ggplot(., aes(x = n_muts_occ, y = AF)) +
+      geom_point() +
+      theme_light() +
       labs(x = "N. of SNV occurrences", 
            title = paste0("AF of high-occurrence SNVs in ", source, " - ", marker))
     print(af)
     
     aff <- all_occurrences %>% filter(., n_muts_occ > 2) %>% 
-      ggplot(., aes(x = n_muts_occ, y = AF))+
-      geom_point()+
-      theme_light()+
+      ggplot(., aes(x = n_muts_occ, y = AF)) +
+      geom_point() +
+      theme_light() +
       labs(x = "N. of SNV occurrences", 
            title = paste0("AF of high-occurrence SNVs in ", source, " - ", marker))
     print(aff)
@@ -272,10 +295,14 @@ for(source in SOURCES){
 
 ##
 
+
+# Analysis for common enhancers across markers
+
 common_enh_sub_dfs <- list("CtIP", "GRHL")
 for(marker in MARKERS){
   df.dist.marker <- df_dist_wins[[marker]]
   
+  # Prepare AF data for ICGC and Hartwig sources
   AF_i <- df.dist.marker[["icgc"]][, c("name", "cluster", "AF")]
   AF_i$source <- rep("icgc", dim(AF_i)[1])
   AF_i$group <- "high"
@@ -290,7 +317,8 @@ for(marker in MARKERS){
   AF_h$group <- "high"
   AF_h[AF_h$cluster %in% cluster_groups[[marker]]$low, ]$group <- "low"
   
-  AF_all <- na.omit(rbind(AF_i, AF_h)) # Many ICGC samples have no AF info 
+  # Combine ICGC and Hartwig data, and add random controls if needed
+  AF_all <- na.omit(rbind(AF_i, AF_h))  # Remove rows with missing AF info
   AF_all$source <- factor(AF_all$source, levels = c("icgc", "hart"))
   
   ## Add AFs dist over random regions as controls
@@ -305,6 +333,7 @@ for(marker in MARKERS){
     AF_all_plus_control <- rbind(AF_all_red, ran_AFs_df_marker)
     AF_all_plus_control$source <- factor(AF_all_plus_control$source, levels = c("icgc", "ran_icgc", "hart", "ran_hart"))
     
+    # Plot AF distribution including random controls
     p_all_c <- AF_all_plus_control %>% 
       ggplot(., aes(x = source, y = AF, fill = source))+
       geom_boxplot()+
@@ -332,6 +361,7 @@ for(marker in MARKERS){
          subtitle = "all enhancers")
   print(p_all)
   
+  # Plot AF distributions by enhancer group (high vs. low)
   p_groups <- AF_all %>% 
     ggplot(., aes(x = source, y = AF, fill = source))+
     geom_boxplot()+
@@ -344,6 +374,7 @@ for(marker in MARKERS){
          subtitle = "high vs. low")
   print(p_groups)
   
+  # Plot AF distributions by enhancer cluster
   p_clusters <- AF_all %>% 
     ggplot(., aes(x = source, y = AF, fill = source))+
     geom_boxplot()+
@@ -363,6 +394,7 @@ for(marker in MARKERS){
   splitted_dfs_list <- split(avg_AF_x_enh, avg_AF_x_enh$source)
   merged_avg_AF <- full_join(splitted_dfs_list[[1]], splitted_dfs_list[[2]], by = "name")
   
+  # Total number of enhancers with SNVs in both datasets
   tot_enh <- length(unique(merged_avg_AF$name)) 
   print(paste0("Total number of enhancers with SNVs in icgc and hart (union):", tot_enh))
   
@@ -371,7 +403,7 @@ for(marker in MARKERS){
   perc <- round(length(unique(common_enh$name)) / tot_enh * 100, 2)
   print( paste0( perc , " %"))
   
-  # Compute FC of avg_af in hartwig vs. icgc, for common enhancers 
+  # Compute fold-change of average AF in Hartwig vs. ICGC for common enhancers
   common_enh$avg_af.fc <- log2(common_enh$avg_af.y / common_enh$avg_af.x)
   t_test_res <- t.test(common_enh$avg_af.fc)$p.value
   fc_hist <- common_enh %>% ggplot(., aes(x = avg_af.fc))+
@@ -386,7 +418,7 @@ for(marker in MARKERS){
          caption = paste0("T-test for mean different from 0 - P-value =  ", round(t_test_res, 3)))
   print(fc_hist)
   
-  # Common enhancers identity 
+  # Plot distribution of common enhancers based on annotations
   # High - Low
   common_enh$group <- "high"
   common_enh[common_enh$cluster.x %in% cluster_groups[[marker]]$low, ]$group <- "low"
@@ -397,7 +429,7 @@ for(marker in MARKERS){
     theme_void()
   print(pie_groups)
   
-  # Each cluster
+  # Plot distribution of common enhancers based on clusters
   plot_pie2 <- common_enh %>% group_by(., cluster.x) %>% summarise(., counts = n())
   pie_clusters <- ggplot(plot_pie2, aes(x="", y=counts, fill=cluster.x)) +
     geom_bar(stat="identity", width=1, color = "white") +
@@ -405,7 +437,7 @@ for(marker in MARKERS){
     theme_void()
   print(pie_clusters)
   
-  # Annotated (loops) or not
+  # Plot distribution of common enhancers based on loop annotation 
   common_enh$anno <- "no"
   common_enh[common_enh$name %in% annotated_enhancers$name, ]$anno <- "yes"
   print("Which annotated enhancers: ")
@@ -429,6 +461,7 @@ for(marker in MARKERS){
     coord_polar("y", start=0) +
     theme_void()
   print(pie_groups)
+  
   plot_pie2 <- common_enh_sub %>% group_by(., cluster.x) %>% summarise(., counts = n())
   pie_clusters <- ggplot(plot_pie2, aes(x="", y=counts, fill=cluster.x)) +
     geom_bar(stat="identity", width=1, color = "white") +
@@ -447,41 +480,57 @@ dev.off()
 
 #
 
+# Open a PDF device to save plots with specified dimensions
 pdf(file_name2, width = 15, height = 7)
 
 #
 
 ### SNVs conservation across datasets and VAFs 
 
+# Loop through each marker in the MARKERS list
 for(marker in MARKERS){
+  # Extract distance data for the current marker from the preloaded list
   df.dist.marker <- df_dist_wins[[marker]]
   
+  # Prepare allele frequency (AF) data for ICGC
   AF_i <- df.dist.marker[["icgc"]][, c("name", "cluster", "ID", "AF")]
-  AF_i$source <- rep("icgc", dim(AF_i)[1])
-  AF_i$group <- "high"
+  AF_i$source <- rep("icgc", dim(AF_i)[1]) # Label source as "icgc"
+  AF_i$group <- "high" # Default group
+  # Assign "low" group based on cluster information
   AF_i[AF_i$cluster %in% cluster_groups[[marker]]$low, ]$group <- "low"
   
+  # Prepare allele frequency (AF) data for Hartwig
   AF_h <- df.dist.marker[["hart"]][, c("name", "cluster", "ID", "AF")]
-  AF_h$source <- rep("hart", dim(AF_h)[1])
-  AF_h$group <- "high"
+  AF_h$source <- rep("hart", dim(AF_h)[1]) # Label source as "hart"
+  AF_h$group <- "high" # Default group
+  # Assign "low" group based on cluster information
   AF_h[AF_h$cluster %in% cluster_groups[[marker]]$low, ]$group <- "low"
   
+  
+  # Combine ICGC and Hartwig data, and remove rows with missing AF information
   AF_all <- na.omit(rbind(AF_i, AF_h)) # Many ICGC samples have no AF info 
-  AF_all$source <- factor(AF_all$source, levels = c("icgc", "hart"))
+  AF_all$source <- factor(AF_all$source, levels = c("icgc", "hart")) # Convert source to factor
   
   
   # SNVs in common
+  # Compute position IDs by removing the last 4 characters from the ID
   AF_all$POS_ID <- str_sub(str_sub(AF_all$ID, end = -5))
+  # Split the combined data by source (ICGC and Hartwig)
   splitted_dfs_list <- split(AF_all, AF_all$source)
   
   ## Level 1 - SNVs equal for position 
+  # Calculate total unique SNVs based on position
   tot_SNVs_pos <- length(unique(AF_all$POS_ID)) 
   print(paste0("Total number of POS-SNVs in icgc and hart (union):", tot_SNVs_pos))
+  
+  # Identify common SNVs based on position
   common_SNVs_pos <- splitted_dfs_list$icgc$POS_ID[splitted_dfs_list$icgc$POS_ID %in% splitted_dfs_list$hart$POS_ID]
   common_SNVs_pos_df <- AF_all %>% dplyr::filter(., POS_ID %in% common_SNVs_pos)
   print(paste0("Number of SNVs in icgc and hart (both):", length(unique(common_SNVs_pos_df$POS_ID))))
   
   if(length(unique(common_SNVs_pos_df$POS_ID)) != 0){
+    # Plot occurrences of common SNVs based on position
+    
     # Occurrences Level 1
     df_occ_pos <- common_SNVs_pos_df %>% group_by(POS_ID, source) %>% dplyr::summarise(., n_occ = n()) %>% ungroup()
     df_occ_pos$source <- factor(df_occ_pos$source, levels = c("icgc", "hart")) 
@@ -494,6 +543,7 @@ for(marker in MARKERS){
       theme(strip.text = element_text(size = 7))
     print(p_occ1)
     
+    # Plot allele frequencies of common SNVs based on position
     # AFs of SNVs in common - Level 1 - POS
     common_SNVs_pos_df$AF <- as.numeric(common_SNVs_pos_df$AF) 
     common_SNVs_pos_df$source <- factor(common_SNVs_pos_df$source, levels = c("icgc", "hart"))
@@ -510,13 +560,16 @@ for(marker in MARKERS){
     print(p_af1)
     
     ## Level 2 - SNVs equal for position AND base substitution
+    # Calculate total unique SNVs based on position and base substitution
     tot_SNVs <- length(unique(AF_all$ID)) 
     print(paste0("Total number of SNVs in icgc and hart (union):", tot_SNVs))
+    
+    # Identify common SNVs based on position and base substitution
     common_SNVs <- splitted_dfs_list$icgc$ID[splitted_dfs_list$icgc$ID %in% splitted_dfs_list$hart$ID]
     common_SNVs_df <- AF_all %>% dplyr::filter(., ID %in% common_SNVs)
     print(paste0("Number of SNVs in icgc and hart (both):", length(unique(common_SNVs_df$ID))))
     
-    # Occurrences Level 2
+    # Plot occurrences of common SNVs based on position and base substitution
     df_occ <- common_SNVs_df %>% group_by(ID, source) %>% dplyr::summarise(., n_occ = n()) %>% ungroup()
     df_occ$source <- factor(df_occ$source, levels = c("icgc", "hart")) 
     p_occ2 <- df_occ %>%
@@ -529,6 +582,7 @@ for(marker in MARKERS){
     print(p_occ2)
     
     ## AFs of SNVs in common - Level 2 - POS-BASE
+    # Plot allele frequencies of common SNVs based on position and base substitution
     common_SNVs_df$AF <- as.numeric(common_SNVs_df$AF) 
     common_SNVs_df$source <- factor(common_SNVs_df$source, levels = c("icgc", "hart"))
     
@@ -545,6 +599,7 @@ for(marker in MARKERS){
   }
   
   ## All SNVs in common_enhancers with log2FC(avg. AF) > 0
+  # Filter SNVs within enhancers where log2FC of average AF is greater than 0
   AFs_common_enh <- AF_all %>% dplyr::filter(name %in% common_enh_sub_dfs[[marker]]$name) 
   p_hist <- AFs_common_enh %>% filter(., source == "hart") %>%
     ggplot(., aes(x = AF))+
@@ -556,7 +611,7 @@ for(marker in MARKERS){
          subtitle = "Only enhancers with log2FC(avg. AF) > 0")
   print(p_hist)
   
-  # Plot in detail only top SNVs in terms of AF
+  # Plot top SNVs in terms of AF values
   p_af_top_common <- AFs_common_enh %>% filter(., source == "hart") %>% 
     arrange(., -AF) %>% top_n(n=25,wt=AF) %>%
     ggplot(., aes(x = ID, y = AF, group = ID))+
@@ -570,7 +625,7 @@ for(marker in MARKERS){
           axis.text.x = element_text(angle = 90, vjust = 0.5))
   print(p_af_top_common)
   
-  # Save table
+  # Save table of top SNVs within common enhancers
   table_common <- AFs_common_enh %>% filter(., source == "hart") %>% 
     arrange(., -AF)
   table_common %>% write_tsv(., fs::path(path_results_data, paste0("SNVs_top_AFs.log2FC(avgAF)_greater_0.common_enhancers_", marker, ".tsv")))
@@ -578,7 +633,7 @@ for(marker in MARKERS){
   
   ##
   
-  # Types of substitutions
+  # Plot types of substitutions (SBS)
   table_common$sub <- str_sub(table_common$ID, start = -3)
   SBS_types <- table_common %>% group_by(., sub) %>%
     dplyr::summarise(n = n()) %>%
@@ -598,6 +653,7 @@ for(marker in MARKERS){
 
 ##
 
+# Close the PDF device
 dev.off()
 
 ##

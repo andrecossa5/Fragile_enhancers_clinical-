@@ -1,5 +1,12 @@
 
-#'Annotate SVs as damaging or non-damaging
+#' Annotate SVs as damaging or non-damaging
+#'
+#' This script classifies structural variants (SVs) as damaging or non-damaging based on their overlap with
+#' enhancer-promoter (E - P) regions and their positional relationships within these regions. The types of SVs
+#' considered are deletions, interchromosomal translocations, and inversions. The classification depends on specific
+#' conditions related to the positions of the breakpoints relative to E - P regions.
+#'
+#' Rules for annotation as damaging or non-damaging:
 #'
 #'@Deletion is damaging if 1 bkpt falls within E - P region and the other one falls outside. 
 #'Deletions in which both bpts fall within E - P region bring enhancer and promoter closer.
@@ -10,20 +17,21 @@
 
 suppressMessages({
   
-library(tidyverse)
-library(GenomicRanges)
-library(assertthat)
+library(tidyverse) # For data manipulation and visualization
+library(GenomicRanges) # For handling genomic ranges
+library(assertthat) # For assertions and checks
 
-SEED <- 4321
+SEED <- 4321 # Set seed for reproducibility
 set.seed(SEED)
 
-#MARKERS <- c("CtIP", "GRHL")
-marker <- "GRHL"
-WIN <- 3000 # enhancers window that was used to compute overlap with SVs
-loops_kb <- 2
-naive <- F
-save_SVs_anno <- F
+# Configuration variables
+marker <- "GRHL" # Marker for functional genomics analysis
+WIN <- 3000 # Window size in base pairs used for overlap computation with SVs
+loops_kb <- 2 # Loop resolution in kilobases
+naive <- FALSE # Flag to indicate whether to use the naive method for overlap checking
+save_SVs_anno <- FALSE # Flag to indicate whether to save the annotated SVs
 
+# File paths for input data
 path_SVs <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/NEW/data/Hartwig_all_stsms_info.with_matched_bkpts.no_dup.tsv")
 path_loops <- fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/NEW/", loops_kb, "kb/data/tables/", loops_kb, "kb_Unified_table.SCR_plus_KD_counts.all_anno_loops.ENH_DEGs_any.tsv"))
 path_enhancers <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/GRHL_enh.hq_signal.clustered.tsv")
@@ -34,24 +42,30 @@ path_results_data <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/N
 
 
 # TODO @OPTIMIZE: naive function. Could make it handle more cases. 
-anno_distinct_loops <- function(df, col1, col2){
-  if(is.string(col1) != T | is.string(col2) != T){
-    print("Params must be strings")
-  }
 
+# Define a function to annotate SVs based on their overlap with distinct loops
+#' @param df Data frame containing SV information
+#' @param col1 Name of the column for the first breakpoint
+#' @param col2 Name of the column for the second breakpoint
+#' @return Data frame with an additional column indicating whether SVs overlap distinct loops
+anno_distinct_loops <- function(df, col1, col2){
+  if(is.string(col1) != TRUE | is.string(col2) != TRUE){
+    print("Params must be strings") # Ensure column names are provided as strings
+  }
+  
   col1_str <- df[, col1]  
   col2_str <- df[, col2]
   
-  # Given that SVs are right-oriented, loop 2 comes AFTER loop 1 (at least for 1 bin)
-  col1_split <- str_split(col1_str, pattern = "_", simplify = T)
-  col2_split <- str_split(col2_str, pattern = "_", simplify = T)
+  # Split the loop identifiers to extract start and end positions
+  col1_split <- str_split(col1_str, pattern = "_", simplify = TRUE)
+  col2_split <- str_split(col2_str, pattern = "_", simplify = TRUE)
   
-  # loop2-start > loop1-end
+  # Check if the end of loop 2 is after the start of loop 1
   cond1 <- (as.numeric(col2_split[, 2])) > (as.numeric(col1_split[, 3]))
   
-  # If NA | TRUE = damaging. If FALSE = false_damaging
-  df$distinct_loops <- F
-  df$distinct_loops[ (is.na(cond1) | cond1 == TRUE) ] <- T
+  # Determine if SV overlaps distinct loops based on the condition
+  df$distinct_loops <- FALSE
+  df$distinct_loops[ (is.na(cond1) | cond1 == TRUE) ] <- TRUE
   
   return(df)
 }
@@ -60,16 +74,16 @@ anno_distinct_loops <- function(df, col1, col2){
 ##
 
 
-# Read and pre-process Hart SVs
+# Read and pre-process Hartwig structural variants (SVs) data
 SVs_full <- read_tsv(path_SVs)
 
-# Some checks
-sum(!SVs_full$SAMPLE1 == SVs_full$SAMPLE2, na.rm = T) == 0
-sum(!SVs_full$ID1 == SVs_full$PARID2, na.rm = T) == 0
-sum(!SVs_full$ID2 == SVs_full$PARID1, na.rm = T) == 0
-sum(!SVs_full$TYPE1 == SVs_full$TYPE2, na.rm = T) == 0
+# Perform checks to ensure data consistency
+sum(!SVs_full$SAMPLE1 == SVs_full$SAMPLE2, na.rm = TRUE) == 0
+sum(!SVs_full$ID1 == SVs_full$PARID2, na.rm = TRUE) == 0
+sum(!SVs_full$ID2 == SVs_full$PARID1, na.rm = TRUE) == 0
+sum(!SVs_full$TYPE1 == SVs_full$TYPE2, na.rm = TRUE) == 0
 
-# Add unique SV-SAMPLE ID
+# Add a unique SV-SAMPLE ID and rename columns for clarity
 SVs_full <- SVs_full %>% dplyr::select(., 
                            SAMPLE1, TYPE1, ID1, PARID1, 
                            seqnames1, start1, width1,
@@ -79,7 +93,7 @@ SVs_full <- SVs_full %>% dplyr::select(.,
          seqnames2 = "chr_to", start2 = "chr_to_bkpt", width2 = "chr_to_width") %>%
   mutate(., "sv_id" = str_c(hart_sample_id, bkpt_from_id, bkpt_to_id, sep = "_"))
 
-# Variant types
+# Define the original and simplified variant types for conversion
 variant_types_orig <- c("BND", "DEL", "DUP", "INV", "SGL")
 variant_types_simple <- c("rearrangment", "deletion", "duplication", "inversion", "single-breakend")
 types_conv <- data.frame("orig" = variant_types_orig, "simple" = variant_types_simple)
@@ -101,7 +115,7 @@ SVs_full <- SVs_full %>% dplyr::filter(., !is.na(bkpt_to_id))
 ##
 
 
-# Read loops and enhancers
+# Read loops and enhancers data
 loops <- read_tsv(path_loops)
 enh <- read_tsv(path_enhancers)
 
@@ -111,6 +125,7 @@ print(paste0("--- Annotating SVs loops with resolution: ", loops_kb, " kb ----")
 print("Types of structural variants:")
 print(table(SVs_full$variant_type))
 
+# Convert variant types to simplified names and filter out non-relevant SVs
 SVs_full <- SVs_full %>% left_join(., types_conv, by = c("variant_type" = "orig")) %>% 
   rename(., "simple" = "variant_type_simple") %>% relocate(., variant_type_simple, .after = variant_type)
 
@@ -120,6 +135,7 @@ SVs <- SVs_full %>% dplyr::filter(., !variant_type_simple %in% c("duplication", 
 ## Define E - P regions to be intersected with SVs
 loops_enh_deg <- loops %>% dplyr::filter(., ( !is.na(name1) & !is.na(gene_name2) ) | 
                            ( !is.na(gene_name1) & !is.na(name2) ) )
+# Create GRanges object for E - P regions
 # end1 is always < end2 & end1 is always < start2
 loops_enh_deg$EP_chrom <- loops_enh_deg$seqnames1
 loops_enh_deg$EP_start <- loops_enh_deg$start1
@@ -135,7 +151,7 @@ print(unique(SVs$variant_type_simple))
 SVs_annotated <- data.frame()
 for(type in unique(SVs$variant_type_simple)){
   
-  # tandem duplication - not considered
+  # Skip annotation if the type is NA
   if(is.na(type)){
     next
   }
@@ -146,7 +162,7 @@ for(type in unique(SVs$variant_type_simple)){
     print(paste0("Total number of ", type, " : ", length(unique(dels$sv_id))))
 
     if(naive == T){
-      # Check whether bkpt 1 and bkpt 2 of overlap with one E - P region
+      # For naive method, check if either breakpoint overlaps with E - P regions
       dels_from <- makeGRangesFromDataFrame(dels[, c("chr_from", "chr_from_bkpt")], seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt")
       dels_to <- makeGRangesFromDataFrame(dels[, c("chr_to", "chr_to_bkpt")], seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt")
       
@@ -171,6 +187,8 @@ for(type in unique(SVs$variant_type_simple)){
     }
       
     ##
+    
+    # For non-naive method, perform detailed overlap and distinct loop annotation
     
     # Annotate SVs to loops and damaging effect 
     dels <- SVs %>% dplyr::filter(., variant_type_simple == type)
@@ -213,6 +231,7 @@ for(type in unique(SVs$variant_type_simple)){
   } 
   
   else if(type == "rearrangment"){
+    # Filter for SVs of the type 'rearrangment'
     trans <- SVs %>% dplyr::filter(., variant_type_simple == type)
     print(paste0("--- Annotating variants of type: ", type, " ---"))
     print(paste0("Total number of ", type, ": ", length(unique(trans$sv_id)) )) 
@@ -222,14 +241,17 @@ for(type in unique(SVs$variant_type_simple)){
       trans_from <- makeGRangesFromDataFrame(trans[, c("chr_from", "chr_from_bkpt")], seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt")
       trans_to <- makeGRangesFromDataFrame(trans[, c("chr_to", "chr_to_bkpt")], seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt")
       
+      # Determine overlap with enhancer-promoter regions
       filt_from <- !is.na(findOverlaps(trans_from, loops_enh_deg_gr, select = "arbitrary")) %>% suppressWarnings()
       filt_to <- !is.na(findOverlaps(trans_to, loops_enh_deg_gr, select = "arbitrary")) %>% suppressWarnings()
       
+      # Mark overlaps
       trans$ovrlp_from <- F
       trans$ovrlp_to <- F
       trans[filt_from, ]$ovrlp_from <- T
       trans[filt_to, ]$ovrlp_to <- T
       
+      # Determine if translocations are damaging
       # Is translocation damaging? How many damaging deletions over total?
       dam_vec <- trans$ovrlp_from + trans$ovrlp_to
       trans$damaging <- F
@@ -247,18 +269,22 @@ for(type in unique(SVs$variant_type_simple)){
     # Annotate SVs to loops and damaging effect 
     trans <- SVs %>% dplyr::filter(., variant_type_simple == type)
     
+    # Filter out rearrangements missing one breakpoint
     # Not all rearrangments have both breakpoints, even though they have a ID and PARID
     print("Filtering out rearrangments for which 1 bkpt is absent:")
     trans <- trans %>% dplyr::filter(., !is.na(chr_to_bkpt) & !is.na(chr_from_bkpt))
     print(paste0("New total number of ", type, " :", length(unique(trans$sv_id)) ))
     
+    # Check if all rearrangements are interchromosomal
     print("Are all rearrangments interchromosomal?")
     print(sum(trans$chr_from == trans$chr_to) == 0)
     
+    # Convert rearrangements to GRanges objects for overlapping analysis
     trans_from <- makeGRangesFromDataFrame(trans, seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt", keep.extra.columns = T)
     trans_to <- makeGRangesFromDataFrame(trans, seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt", keep.extra.columns = T)
     df_from <- trans_from; df_to <- trans_to;
     
+    # Find overlaps for both breakpoints
     hits_from <- findOverlaps(query=df_from, subject=loops_enh_deg_gr)
     overlaps_from <- cbind(data.frame(df_from[queryHits(hits_from)]),
                            data.frame("unique_loop_id_from" = mcols(loops_enh_deg_gr[subjectHits(hits_from)])[, "unique_loop_id"]))
@@ -275,7 +301,7 @@ for(type in unique(SVs$variant_type_simple)){
     overlaps_join <- full_join(overlaps_from, overlaps_to, relationship = "many-to-many") %>% suppressMessages()
     print(paste0("Total number of ", type, " overlapping loops : ", length(unique(overlaps_join$sv_id))))
     
-    # All translocations within overlaps_join should be damaging
+    # Determine if all translocations in overlaps_join are damaging (they should)
     dam_vec <- is.na(overlaps_join$unique_loop_id_from) & is.na(overlaps_join$unique_loop_id_to)
     if(sum(dam_vec) == 0){
       print("- All rearrangments overlapping a loop are damaging -")
@@ -284,7 +310,7 @@ for(type in unique(SVs$variant_type_simple)){
       cat("\n")
       
       overlaps_join$damaging <- TRUE
-      # For which loop is the SV damaging? (from or to)
+      # Mark if SV is damaging to either loop_from or loop_to
       overlaps_join$dam_from <- !is.na(overlaps_join$unique_loop_id_from)
       overlaps_join$dam_to <- !is.na(overlaps_join$unique_loop_id_to)
   
@@ -294,15 +320,18 @@ for(type in unique(SVs$variant_type_simple)){
   }
   
   else if(type == "inversion"){
+    # Filter for SVs of the type 'inversion'
     invs <- SVs %>% dplyr::filter(., variant_type_simple == type)
     print(paste0("--- Annotating variants of type: ", type, " ---"))
     print(paste0("Total number of ", type, ": ", length(unique(invs$sv_id)) )) 
     
+    # Filter out inversions missing one breakpoint
     # Not all rearrangments have both breakpoints, even though they have a ID and PARID
     print("Filtering out inversions for which 1 bkpt is absent:")
     invs <- invs %>% dplyr::filter(., !is.na(chr_to_bkpt) & !is.na(chr_from_bkpt))
     print(paste0("New total number of ", type, " :", length(unique(invs$sv_id)) ))
     
+    # Convert inversions to GRanges objects for overlapping analysis
     # Check whether bkpt 1 and bkpt 2 of overlap with one E - P region
     invs_from <- makeGRangesFromDataFrame(invs, seqnames.field = "chr_from", start.field = "chr_from_bkpt", end.field = "chr_from_bkpt", keep.extra.columns = T)
     invs_to <- makeGRangesFromDataFrame(invs, seqnames.field = "chr_to", start.field = "chr_to_bkpt", end.field = "chr_to_bkpt", keep.extra.columns = T)
@@ -322,6 +351,7 @@ for(type in unique(SVs$variant_type_simple)){
     overlaps_to <- overlaps_to %>% dplyr::rename(.,  "chr_to" = "seqnames", "chr_to_bkpt" = "start") %>% 
       dplyr::select(., -c(end, width, strand)) %>% dplyr::relocate(., c(chr_to, chr_to_bkpt), .before = hart_sample_id) 
     
+    # Join overlapping information
     # full_join joins by all columns in common (only unique_loop_id_from/to is not in common)
     overlaps_join <- full_join(overlaps_from, overlaps_to, relationship = "many-to-many") %>% suppressMessages()
     print(paste0("Total number of ", type, " overlapping loops : ", length(unique(overlaps_join$sv_id))))
@@ -334,13 +364,13 @@ for(type in unique(SVs$variant_type_simple)){
     #' These SVs are not present in overlaps_join, which contains only SVs-loops matches
     
     #' @Option 2: one of the two SV coords (either from or to) overlaps with a loop
-    sum(!invs$chr_from_bkpt <= invs$chr_to_bkpt) # always T - 2nd bkpt always comes after 1st bkpt
+    sum(!invs$chr_from_bkpt <= invs$chr_to_bkpt) # always T - 2nd bkpt always comes after 1st bkpt - TODO: check that this true for Hartwig as well (it was true for ICGC)
     opt2_vec<- (!is.na(overlaps_join$unique_loop_id_from)) + (!is.na(overlaps_join$unique_loop_id_to))
     opt_2 <- overlaps_join %>% dplyr::filter(., 
                                              (!is.na(unique_loop_id_from) & is.na(unique_loop_id_to)) | (is.na(unique_loop_id_from) & !is.na(unique_loop_id_to)) )
     
-    # 1st bkpt overlaps with loop
-    # Compute distances: inner bkpt_from - loop_bin2 & loop_bin2 - outer bkpt_to
+    # For inversions where only the 1st breakpoint overlaps a loop
+    # Compute distances: inner breakpoint - loop_bin2 & loop_bin2 - outer breakpoint
     opt2_from <- opt_2[!is.na(opt_2$unique_loop_id_from), ] %>% 
       left_join(., loops_enh_deg, by = c("unique_loop_id_from" = "unique_loop_id")) %>% 
       mutate(., "inner_dist" = ( (start2+(loops_kb*1000/2)) - chr_from_bkpt) ) %>%
@@ -368,6 +398,7 @@ for(type in unique(SVs$variant_type_simple)){
     opt_3$dam_from <- F
     opt_3$dam_to <- F
     
+    # For inversions where both breakpoints overlap with loops
     # Check whether inversion is damaging for one of the 2 loops
     opt_3_not <- opt_3 %>% dplyr::filter(., distinct_loops == F) 
     opt_3_dam <- opt_3 %>% dplyr::filter(., distinct_loops == T)
@@ -401,8 +432,7 @@ for(type in unique(SVs$variant_type_simple)){
       
     ##
     
-    # Ri-merge everything 
-    
+    # Combine results from all options
     overlaps_join <- rbind(opt_2_new, opt_3_new) %>% 
       relocate(., damaging, .before = dam_from)
     print(paste0("Damaging inversions ", length(unique(overlaps_join[overlaps_join$damaging == T,]$sv_id)), " over ", length(unique(overlaps_join$sv_id)), 

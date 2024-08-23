@@ -13,18 +13,20 @@
 
 
 library(tidyverse)
-library(TFBSTools)
-library(BSgenome)
-library(JASPAR2020)
-library(GenomicRanges)
-library(VariantAnnotation)
-library(BSgenome.Hsapiens.UCSC.hg19)
+library(TFBSTools) # For working with position weight matrices (PWM)
+library(BSgenome) # For genomic sequences
+library(JASPAR2020) # For JASPAR database of PWMs
+library(GenomicRanges) # For handling genomic intervals
+library(VariantAnnotation) # For working with variant data
+library(BSgenome.Hsapiens.UCSC.hg19) # Genomic sequences for human hg19
 
+# Set random seed for reproducibility
 SEED <- 4321
 set.seed(SEED)
-  
 
 dir <- "local" # "local" or "hpc"
+
+# Define file paths for input data and output results
 if(dir == "hpc"){
   path_enh_SSMs <- list("CtIP" = fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/NEW/enhancers_SSMs_overlaps/data/Table_enh_SNVs.CtIP.all_overlaps.3000bp_WIN.tsv"), 
                         "GRHL" = fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/NEW/enhancers_SSMs_overlaps/data/Table_enh_SNVs.GRHL.all_overlaps.3000bp_WIN.tsv"))
@@ -35,36 +37,44 @@ if(dir == "hpc"){
   path_results <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/NEW/damaging_variants_annotation/")
 }
 
-WIN <- 1000
-MARKERS <- c("CtIP", "GRHL")
-motif_thresh <- 70 # score is typically expressed as a percentage of the maximum possible score for a match to the PWM. 
-save_anno <- F
+# Define parameters
+WIN <- 1000  # Window size around motifs for classification
+MARKERS <- c("CtIP", "GRHL")  # List of markers to process
+motif_thresh <- 70  # Threshold score percentage for motif matching (score is typically expressed as a percentage of the maximum possible score for a match to the PWM.)
+save_anno <- T  # Whether to save the annotated results
 
 
 ##
 
 
+# Define the motif ID for GRHL2 and retrieve the position weight matrix (PWM) from JASPAR2020
 # GRHL2 motif ID - BaseID: MA1105; MatrixID: MA1105.2 (JASPAR2020 CORE, latest version)
 motif_id <- "MA1105.2"
 pfm <- getMatrixSet(JASPAR2020, opts = list(ID = motif_id))
 
-# Load variants - enhancers overlap 
+# Initialize lists to store data for enhancers and genomic ranges
 enh_SSMs <- list()
 enh_gr <- list()
+
+# Process each marker
 for(marker in MARKERS){
+  # Define column names for reading input files
   enh_SSMs[[marker]] <- read_tsv(path_enh_SSMs[[marker]]) %>% suppressMessages()
   
-  ## Filter enh_SSMs obj to keep overlaps compatible with WIN
+  ## Filter data to respect the window size around motifs
   
   enh_SSMs_filt <- enh_SSMs[[marker]]
   print(paste0("--- Filtering overlaps respecting WIN = ", WIN, " ---"))
   print(paste0("Initial number of overlaps: ", dim(enh_SSMs_filt)[1]))
   
+  # Calculate distance between SNV start and enhancer summit
   enh_SSMs_filt$dist <- abs(enh_SSMs_filt$start_sbj - enh_SSMs_filt$summit)
+  
+  # Keep only overlaps within the defined window size
   enh_SSMs_filt <- enh_SSMs_filt %>% dplyr::filter(., dist <= WIN)
   print(paste0("Final number of overlaps after filtering: ", dim(enh_SSMs_filt)[1])); cat("\n")
   
-  # Change sequences size as well 
+  # Adjust enhancer coordinates to match the window size
   enh_SSMs_filt$start <- enh_SSMs_filt$start + (3000 - WIN)
   enh_SSMs_filt$end <- enh_SSMs_filt$end - (3000 - WIN)
   enh_SSMs_filt$width <- unique(enh_SSMs_filt$end - enh_SSMs_filt$start)
@@ -72,8 +82,8 @@ for(marker in MARKERS){
     
   ##
   
+  # Convert enhancer data to GRanges format
   to_conv <- enh_SSMs[[marker]] %>% dplyr::select(., c(seqnames, start, end, width, summit, name))
-  # Convert 50bp extended enhancers into GRanges 
   enh_gr1 <- makeGRangesFromDataFrame(to_conv, keep.extra.columns = T, 
                                       seqnames.field = "seqnames", start.field = "start", end.field = "end", ignore.strand = T)
   
@@ -86,35 +96,39 @@ for(marker in MARKERS){
 
 ## Motif scanning across enhancer regions 
 
-# GRHL2 motif has a length of 12 bp, but matchPWM looks for complete matches (of the whole sequence)
+# Convert the PWM to a format suitable for matching
 pwm <- toPWM(pfm[[1]])
 
+# Initialize lists to store motif matches and position information
 matches_list_markers <- list()
 motif_pos_info <- data.frame(matrix(nrow = 1, ncol=5)) 
 colnames(motif_pos_info) <- c("enh_name", "motif_id", "motif_start", "motif_end", "motif_score")
 motif_pos_info_markers <- list("CtIP" = motif_pos_info, "GRHL" = motif_pos_info)
 
+# Scan for motifs in each marker
 for(marker in MARKERS){
   
-  # Look for GRHL2 motifs matches within enhancer sequences
+  # Extract sequences for the enhancer regions
   seqs <- getSeq(BSgenome.Hsapiens.UCSC.hg19, enh_gr[[marker]])
+  
+  # Match the PWM to the sequences
   min_score_thresh <- paste0(as.character(motif_thresh), "%")
   matches_list <- lapply(seqs, function(seq) {
     matchPWM(pwm@profileMatrix, seq, min.score = min_score_thresh, with.score = TRUE)
   })
   matches_list_markers[[marker]] <- matches_list
   
-  # Get motif start-end coordinates in enhancer regions 
+  # Record motif match information 
   for(i in 1:length(matches_list_markers[[marker]])){
     match <- matches_list_markers[[marker]][[i]]
     if(length(match) == 0){
-      # TODO: add enhancer info 
+      # If no matches, record NA values
       enh_name <- enh_gr[[marker]][i]$name
       info <- data.frame(matrix(c(enh_name, rep(NA,4)), nrow = 1))
       colnames(info) <- c("enh_name", "motif_id", "motif_start", "motif_end", "motif_score")
       motif_pos_info_markers[[marker]] <- rbind(motif_pos_info_markers[[marker]], info)
     } else {
-      # CAREFUL: there can be more than 1 match for each enhancer 
+      # Record start, end, and score for each motif match
       motif_start <- start(enh_gr[[marker]][i]) + start(match) - 1
       motif_end <-  start(enh_gr[[marker]][i]) + end(match) - 1
       motif_score <- round(mcols(match)$score,2) 
@@ -129,7 +143,7 @@ for(marker in MARKERS){
   # Remove duplicated rows - we keep only motif match for each enhancer
   motif_pos_info_markers[[marker]] <- motif_pos_info_markers[[marker]][!duplicated(motif_pos_info_markers[[marker]]), ]
   
-  # Print some info
+  # Print information about motif matches
   n_enh_motif <- length(unique(
     motif_pos_info_markers[[marker]] %>% 
       dplyr::filter(., ( !duplicated(.) & !is.na(motif_id) ) ) %>%
@@ -147,10 +161,12 @@ for(marker in MARKERS){
 
 ## Annotation of SNVs to damaging levels according to variant position 
 
+# Initialize list to store annotated data
 enh_SSMs_anno <- list()
 
+# Annotate each marker
 for(marker in MARKERS){
-  # Prepare SSMs to annotate
+  # Prepare data for annotation
   df_enh_var <- enh_SSMs[[marker]]
   df_vars_only <- df_enh_var %>% dplyr::select(., c(ID, seqnames_sbj, start_sbj, end_sbj, icgc_mutation_id))
   df_vars_only_gr <- makeGRangesFromDataFrame(df_vars_only, keep.extra.columns = T, 
@@ -178,12 +194,13 @@ for(marker in MARKERS){
 
   # Annotate
   
-  df_enh_var$damaging <- 3
-  df_enh_var[hits1, ]$damaging <- 1
-  df_enh_var[ (hits2 & !hits1), ]$damaging <- 2
+  # Annotate variants based on overlap levels
+  df_enh_var$damaging <- 3  # Default level
+  df_enh_var[hits1, ]$damaging <- 1 # Level 1: Within motif
+  df_enh_var[ (hits2 & !hits1), ]$damaging <- 2 # Level 2: Within extended region
   enh_SSMs_anno[[marker]] <- df_enh_var
   
-  # Print some info
+  # Print information about annotation
   cat("\n")
   print(paste0("Total number of variants for ", marker, " enhancers - WIN = ", WIN, ": ", 
                dim(enh_SSMs_anno[[marker]])[1]))
@@ -191,7 +208,7 @@ for(marker in MARKERS){
   print("Proportion of damaging vs. non-damaging: ")
   print(paste0( "Damaging level - ", names(t), ": ", round(t, 2), "%" ))
   
-  # Save annotated 
+  # Save the annotated data if specified
   if(save_anno == T){
     enh_SSMs_anno[[marker]] %>% 
       write_tsv(., fs::path(path_results, paste0("Table_enh_SSMs_", marker, ".all_overlaps.", WIN, "bp_WIN.with_damaging_anno.motif_thresh_", motif_thresh, ".tsv")))

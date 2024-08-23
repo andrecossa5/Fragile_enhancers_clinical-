@@ -4,13 +4,14 @@ library(ggplot2)
 
 location <- "local" # 'local' or 'hpc'
 
+# Define file paths for local environment
 path_SSMs <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/raw_ICGC/simple_somatic_mutation.open.tsv")
 path_SSMs_with_AF <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/raw_ICGC/simple_somatic_mutation.open.with_AF.tsv")
 path_STSMs <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/raw_ICGC/structural_somatic_mutation.tsv")
 
 path_results <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/genomics/pre_processed_ICGC/")
 
-
+# Override file paths if using HPC environment
 if(location == "hpc"){
   path_SSMs <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/genomics/raw_ICGC/simple_somatic_mutation.open.tsv")
   path_SSMs_with_AF <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/data/genomics/raw_ICGC/simple_somatic_mutation.open.with_AF.tsv")
@@ -20,30 +21,36 @@ if(location == "hpc"){
 }
   
 
+##
+
+
 ### SIMPLE SOMATIC MUTATIONS ###
 
-# Raw ICGC file contains 17'889'165 instances
+
+# Load the raw ICGC simple somatic mutation (SSM) data
+# The dataset contains 17,889,165 entries
 SSMs <- read_tsv(path_SSMs)
 dim(SSMs)
 
 
-# Multiple variant callers were used to call variants
+# Check how many distinct variant callers (column 15) are used in the data
 table(SSMs[,15])
 
-# But most calls are equal among callers. SSMs_distinct contains 5'012'977 fields
+# Remove duplicate entries based on all columns except the variant caller
+# Most calls are equal among callers. The resulting dataset contains 5,012,977 entries
 SSMs_distinct <- distinct(SSMs[, -15])
 dim(SSMs_distinct)
 
 
 ## Among all the SSMs, some are present only once, others multiple times
 
-# Mutations in which, for each icgc_mutation_id, only one instance is present
+# Select mutations that are unique, i.e., they appear only once per icgc_mutation_id
 SSMs_matching <- SSMs_distinct %>% group_by(icgc_mutation_id) %>%
   mutate(., n_ist = length(icgc_mutation_id)) %>%
   dplyr::filter(., n_ist == 1) %>%
   ungroup()
 
-# Mutations for which, for each icgc_mutation_id, more istances are present
+# Select mutations that have multiple instances per icgc_mutation_id
 SSMs_not_matching <- SSMs_distinct %>% group_by(icgc_mutation_id) %>%
   mutate(., n_ist = length(icgc_mutation_id)) %>%
   dplyr::filter(., n_ist != 1) %>%
@@ -51,7 +58,7 @@ SSMs_not_matching <- SSMs_distinct %>% group_by(icgc_mutation_id) %>%
 
 
 # Multiple instances of the same icgc_mutation_id differ for one or few of the other fields (such as: icgc_donor_id, icgc_sample_id, etc)
-# I.e. because the SAME mutation (with a unique icgc_mutation_id) is found in MULTIPLE donors (several icgc_donor_id)
+# This occurs because the SAME mutation (with a unique icgc_mutation_id) is found in MULTIPLE donors (several icgc_donor_id)
 SSMs_var_sum <- SSMs_not_matching %>% group_by(icgc_mutation_id) %>%
   dplyr::summarise(
     n_donors = length(unique(icgc_donor_id)), 
@@ -75,66 +82,41 @@ SSMs_not_matching$distinct_mut <- NULL
 SSMs_matching$n_ist <- NULL
 
 
-## Re-joining with matching SSMs
+# Combine the unique and non-duplicated SSMs into a single dataset
 SSMs_new <- rbind(SSMs_matching, SSMs_not_matching)
 
 #write_tsv(SSMs_new, fs::path(path_results, "simple_somatic_mutation.open.matching_calls.tsv"))
 
 
-
-
-### STRUCTURAL SOMATIC MUTATIONS ###
-
-# STSMs 
-STSMs <- read_tsv(path_STSMs) # it contains by default only unique calls
-STSMs <- STSMs[, c(1:23)]
-
-# Each STSM has a 'from' breakpoint and a 'to' breakpoint. Split the two info to maintain both as separate bkpts
-STSMs_coords <- STSMs
-STSMs_coords_from <- STSMs_coords[, c(1:16)]
-STSMs_coords_from$class <- rep("from", dim(STSMs_coords_from)[1])
-colnames(STSMs_coords_from) <- c(colnames(STSMs_coords_from)[1:11], c("chrom", "chrom_bkpt", "strand", "range", "chrom_flanking_seq", "class"))
-
-STSMs_coords_to <- STSMs_coords[, c(1:11, 17:21)]
-STSMs_coords_to$class <- rep("to", dim(STSMs_coords_to)[1])
-colnames(STSMs_coords_to) <- c(colnames(STSMs_coords_to)[1:11], c("chrom", "chrom_bkpt", "strand", "range", "chrom_flanking_seq", "class"))
-
-STSMs_coords_whole <- rbind(
-  STSMs_coords_from, STSMs_coords_to
-)
-
-STSMs_coords_whole$sv_id_x_class <- 
-  paste(STSMs_coords_whole$sv_id, STSMs_coords_whole$class, sep = "_")
-STSMs_coords_whole <- relocate(STSMs_coords_whole, sv_id_x_class, .after = sv_id)
-
-#write_tsv(STSMs_coords_whole, fs::path(path_results, "structural_somatic_mutation.preprocessed.tsv"))
-
+##
 
 
 ### SIMPLE SOMATIC MUTATIONS WITH AF ###
 
-# Raw ICGC file contains 17'889'165 instances
+# Load the raw ICGC simple somatic mutation (SSM) data with allele frequency (AF) information
+# The dataset contains 17,889,165 entries
 SSMs <- read_tsv(path_SSMs_with_AF)
 dim(SSMs)
 
 
-# Multiple variant callers were used to call variants
+# Check how many distinct variant callers (column 16) are used in the data
 table(SSMs[,16])
 
-# But most calls are equal among callers. SSMs_distinct contains 5'012'977 fields
+# Remove duplicate entries based on all columns except the variant caller
+# The resulting dataset contains 5,012,977 entries
 SSMs_distinct <- distinct(SSMs[, -16])
 dim(SSMs_distinct)
 
 
 ## Among all the SSMs, some are present only once, others multiple times
 
-# Mutations in which, for each icgc_mutation_id, only one instance is present
+# Select mutations that are unique, i.e., they appear only once per icgc_mutation_id
 SSMs_matching <- SSMs_distinct %>% group_by(icgc_mutation_id) %>%
   mutate(., n_ist = length(icgc_mutation_id)) %>%
   dplyr::filter(., n_ist == 1) %>%
   ungroup()
 
-# Mutations for which, for each icgc_mutation_id, more istances are present
+# Select mutations that have multiple instances per icgc_mutation_id
 SSMs_not_matching <- SSMs_distinct %>% group_by(icgc_mutation_id) %>%
   mutate(., n_ist = length(icgc_mutation_id)) %>%
   dplyr::filter(., n_ist != 1) %>%
@@ -142,7 +124,7 @@ SSMs_not_matching <- SSMs_distinct %>% group_by(icgc_mutation_id) %>%
 
 
 # Multiple instances of the same icgc_mutation_id differ for one or few of the other fields (such as: icgc_donor_id, icgc_sample_id, etc)
-# I.e. because the SAME mutation (with a unique icgc_mutation_id) is found in MULTIPLE donors (several icgc_donor_id)
+# This occurs because the SAME mutation (with a unique icgc_mutation_id) is found in MULTIPLE donors (several icgc_donor_id)
 SSMs_var_sum <- SSMs_not_matching %>% group_by(icgc_mutation_id) %>%
   dplyr::summarise(
     n_donors = length(unique(icgc_donor_id)), 
@@ -154,16 +136,20 @@ summary(SSMs_var_sum)
 
 
 # ----- #
-# Filter out variants WITHOUT total_read_count - since we need AFs, we are not interested in those not having this info
+
+# Filter out variants that do not have total_read_count information
+# Since we need AFs, we are not interested in mutations lacking this info
 SSMs_not_matching_with_AF <- SSMs_not_matching %>% filter(., !is.na(total_read_count))
-# Some mutations are called in multiple samples (for the same donor) and have different total_read_count / mutant_allele_read_count
-# We select the mutation having the highest total_read_count
+
+# For mutations found in multiple samples for the same donor, select the mutation with the highest total_read_count
 SSMs_not_matching_with_AF_clean <- SSMs_not_matching_with_AF %>% group_by(icgc_mutation_id, icgc_donor_id) %>% 
   dplyr::filter(total_read_count == max(total_read_count)) %>% 
   ungroup()
-# Some variants have equal total_read_counts - slect the first copy only (random)
+
+# For variants with equal total_read_count, select the first copy (random selection)
 SSMs_not_matching_with_AF %>% group_by(icgc_mutation_id, icgc_donor_id) %>% 
   slice(1)
+
 # ---- #
 
 
@@ -181,10 +167,50 @@ SSMs_not_matching$distinct_mut <- NULL
 
 SSMs_matching$n_ist <- NULL
 
-## Re-joining with matching SSMs
+# Combine the unique and non-duplicated SSMs into a single dataset
 SSMs_new <- rbind(SSMs_matching, SSMs_not_matching)
+
+# Calculate the allele frequency (AF) for each mutation and add it as a new column
 SSMs_new$AF <- round(SSMs_new$mutant_allele_read_count / SSMs_new$total_read_count, 3)
   
+# Save the cleaned SSM dataset with AFs
 #write_tsv(SSMs_new, fs::path(path_results, "simple_somatic_mutation.open.matching_calls.with_AFs.tsv"))
 
 
+##
+
+
+### STRUCTURAL SOMATIC MUTATIONS ###
+
+
+# Load the raw ICGC structural somatic mutation (STSM) data
+# The dataset contains only unique calls by default
+STSMs <- read_tsv(path_STSMs) 
+STSMs <- STSMs[, c(1:23)]
+
+# Each STSM has a 'from' breakpoint and a 'to' breakpoint
+# Split the dataset into two: one for 'from' breakpoints and one for 'to' breakpoints
+STSMs_coords <- STSMs
+STSMs_coords_from <- STSMs_coords[, c(1:16)]
+STSMs_coords_from$class <- rep("from", dim(STSMs_coords_from)[1])
+colnames(STSMs_coords_from) <- c(colnames(STSMs_coords_from)[1:11], c("chrom", "chrom_bkpt", "strand", "range", "chrom_flanking_seq", "class"))
+
+STSMs_coords_to <- STSMs_coords[, c(1:11, 17:21)]
+STSMs_coords_to$class <- rep("to", dim(STSMs_coords_to)[1])
+colnames(STSMs_coords_to) <- c(colnames(STSMs_coords_to)[1:11], c("chrom", "chrom_bkpt", "strand", "range", "chrom_flanking_seq", "class"))
+
+# Combine the 'from' and 'to' breakpoints into a single dataset
+STSMs_coords_whole <- rbind(
+  STSMs_coords_from, STSMs_coords_to
+)
+
+# Create a new column that combines the sv_id and class for each entry
+STSMs_coords_whole$sv_id_x_class <- 
+  paste(STSMs_coords_whole$sv_id, STSMs_coords_whole$class, sep = "_")
+STSMs_coords_whole <- relocate(STSMs_coords_whole, sv_id_x_class, .after = sv_id)
+
+# Save the preprocessed STSM dataset
+#write_tsv(STSMs_coords_whole, fs::path(path_results, "structural_somatic_mutation.preprocessed.tsv"))
+
+
+##

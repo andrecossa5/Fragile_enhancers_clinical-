@@ -2,10 +2,10 @@
 #
 suppressMessages({
   
-library(tidyverse)
-library(ggplot2)
+library(tidyverse)  # Load the tidyverse package for data manipulation and visualization
+library(ggplot2)    # Load ggplot2 for creating plots
 
-
+# Define file paths for input data and results
 path_overlaps <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/NEW/data")
 path_anno_enhancers <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/annotated_enhancers/NEW/")
 path_results_data <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/NEW/data")
@@ -13,22 +13,26 @@ path_results_plots <- fs::path("/hpcnfs/scratch/P_PGP_FRAGILE_ENHANCERS/results/
 
 path_overlaps_icgc <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/enhancers_SSMs_overlaps/NEW/data/")
 path_results_icgc <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/ICGC/enhancers_SSMs_overlaps/NEW/data/")
-  
+
+# Set a seed for reproducibility
 SEED <- 4321
-set.seed(SEED) 
-           
+set.seed(SEED)
+
+# Define window size and markers
 WIN <- 3000
 MARKERS <- c("CtIP", "GRHL")
 
-
 ##
 
+
+# Set up the output file for density plots
 file_name <- fs::path(path_results_plots, paste0("Rplots.density.snvs_distribution_over_enhancers.pdf")) 
 pdf(file_name)
 
+
 ##
 
-# Read enhancers x variants table overlaps 
+# Read and process overlaps between enhancers and SNVs
 overlaps <- setNames(vector(mode="list", length=length(MARKERS)), MARKERS)
 
 # FIXME: 
@@ -37,61 +41,65 @@ overlaps <- setNames(vector(mode="list", length=length(MARKERS)), MARKERS)
 # - change code below: remove addition of column_names 
 
 for(marker in MARKERS){
+  # Define column names for overlaps files
   column_names <- c(
     paste0(c("seqnames", "start", "end", "width", "strand", "name", "summit", "cluster"), "_enh"), 
     paste0(c("seqnames", "start", "end", "width", "strand", "REF", "ALT", "QUAL", "FILTER", "SAMPLE", "PURPLE_AF", "AF", "ID"), "_snv")
   )
+  # Read the TSV file for the current marker and assign column names
   overlaps[[marker]] <- read_tsv(fs::path(path_overlaps, paste0(marker, "_enh.hartwig_snvs.overlap.WIN_", WIN, ".tsv")))
   colnames(overlaps[[marker]]) <- column_names
 }
 
-# Define groups of clusters
+# Define cluster groups for each marker
 cluster_groups <- setNames(vector(mode="list", length=length(MARKERS)), MARKERS)
 cluster_groups$CtIP <- list(
   "high" = c("cluster_1", "cluster_2", "cluster_3", "cluster_4"), 
   "low" = c("cluster_5")
 )
-cluster_groups$GRHL <- cluster_groups$CtIP # clusters are equal
+cluster_groups$GRHL <- cluster_groups$CtIP  # GRHL has the same cluster groups as CtIP
 
-                     
-##
+## 
 
+# Parameters for plotting
+anno_only <- FALSE  # Flag to determine if only annotated enhancers should be used
+high_low <- TRUE    # Flag to separate plots for high vs. low cluster enhancers
+each_cluster <- TRUE  # Flag to create separate plots for each enhancer cluster
+save_plots <- FALSE  # Flag to save plots to files
+save_dist <- TRUE    # Flag to save distance data to files
 
-# Plot distribution of SNVs over enhancers regions
-
-anno_only <- F
-high_low <- T
-each_cluster <- T
-save_plots <- F
-save_dist <- T
-  
+# Iterate over each marker to compute and plot SNV distributions
 for(marker in MARKERS){
   label <- "all_enhancers"
   
-  # Distance of SNV from enhancers summit. start_sbj and end_abj are equal
+  # Compute distance of SNVs from enhancer summits
   cat("\n")
-  print(paste0("Computing distribution of SNVs distnaces from ", marker, " enhancers summit"))
+  print(paste0("Computing distribution of SNVs distances from ", marker, " enhancers summit"))
   
-  if(marker == "GRHL" & anno_only == T){
+  if(marker == "GRHL" & anno_only){
     label <- "annotated_enhancers_only"
     print(paste0("Plotting variants from: ", label))
+    # Read annotated enhancers for GRHL and filter overlaps to include only annotated enhancers
     annotated_enhancers <- read_tsv(fs::path(path_anno_enhancers, "2kb_GRHL2_enhancers.from_SCR_specific_loops.linked_to_DOWN_DEGs.tsv"))
     overlaps[[marker]] <- overlaps[[marker]] %>% filter(name_enh %in% annotated_enhancers$name)
   }
   
+  # Create a data frame with distances of SNVs from enhancer summits
   all_distances <- data.frame("dist" = as.numeric(overlaps[[marker]]$start_snv) - as.numeric(overlaps[[marker]]$summit_enh), 
                               "cluster" = overlaps[[marker]]$cluster_enh, "name" = overlaps[[marker]]$name_enh, 
                               "ID" = overlaps[[marker]]$ID_snv, "PURPLE_AF" = overlaps[[marker]]$PURPLE_AF_snv, "AF" = overlaps[[marker]]$AF_snv)
-  if(save_dist == T){
-    all_distances %>% write_tsv(., fs::path(path_results_data, paste0("distances.snvs_distribution_over_enhancers.", marker, ".all_clusters.", label, ".tsv")))}
   
+  # Save distance data to a file if the flag is set
+  if(save_dist){
+    all_distances %>% write_tsv(., fs::path(path_results_data, paste0("distances.snvs_distribution_over_enhancers.", marker, ".all_clusters.", label, ".tsv")))
+  }
   
-  # Plot density of SNVs distribution over enhancer region - ALL enhancers
-  bw <- 100   
-  d_all <- all_distances %>% ggplot(., aes(dist))+
-    geom_density(fill = "lightblue3", color = "lightblue3",alpha = 0.7, bw = bw)+
-    theme_light()+
-    scale_x_continuous(breaks = seq(-3000, 3000, 500))+
+  # Plot density of SNVs distribution over enhancer regions for all enhancers
+  bw <- 100  # Bandwidth for density plot
+  d_all <- all_distances %>% ggplot(., aes(dist)) +
+    geom_density(fill = "lightblue3", color = "lightblue3", alpha = 0.7, bw = bw) +
+    theme_light() +
+    scale_x_continuous(breaks = seq(-3000, 3000, 500)) +
     labs(
       title = paste0("SNVs distribution over ", marker, " enhancers"),
       x = "distance from summit", y = ""
@@ -99,24 +107,26 @@ for(marker in MARKERS){
   print("Plotting SNVs distribution over enhancer region - ALL enhancers")
   print(d_all)
   
-  if(save_plots == T){
-  ggsave(plot=d_all, filename=fs::path(path_results_plots, paste0("density.snvs_distribution_over_enhancers.", marker, ".all_clusters.", label, ".png")), 
-         device = "png", width = 9.805556, height = 7.027778)}
+  # Save the plot if the flag is set
+  if(save_plots){
+    ggsave(plot=d_all, filename=fs::path(path_results_plots, paste0("density.snvs_distribution_over_enhancers.", marker, ".all_clusters.", label, ".png")), 
+           device = "png", width = 9.805556, height = 7.027778)
+  }
   
-
-  # Plot density of SNVs distribution over enhancer region - HIGH vs. LOW enhancers
-  if(high_low ==T){
+  # Plot density of SNVs distribution for high vs. low enhancer clusters
+  if(high_low){
     dist_high <- all_distances %>% filter(cluster %in% cluster_groups[[marker]]$high) 
     dist_low <- all_distances %>% filter(cluster %in% cluster_groups[[marker]]$low) 
     
+    # Create a combined data frame for plotting high vs. low clusters
     max_dist_length <- max(dim(dist_high)[1], dim(dist_low)[1])
     df_grouped <- data.frame("high" = c(dist_high$dist, rep(NA, max_dist_length - dim(dist_high)[1])), 
                              "low" = c(dist_low$dist, rep(NA, max_dist_length - dim(dist_low)[1])))
     
     d_high_low <- df_grouped %>% pivot_longer(everything(), names_to = "cluster", values_to = "distances") %>%
-      ggplot(., aes(x = distances, color = cluster, fill = cluster))+
-      geom_density(bw = bw, alpha = 0.2)+
-      theme_light()+
+      ggplot(., aes(x = distances, color = cluster, fill = cluster)) +
+      geom_density(bw = bw, alpha = 0.2) +
+      theme_light() +
       labs(
         title = paste0("SNVs distribution over ", marker, " enhancers"), 
         x = "distance from summit", y = ""
@@ -124,36 +134,41 @@ for(marker in MARKERS){
     print("Plotting SNVs distribution over enhancer region - HIGH vs. LOW enhancers")
     print(d_high_low)
     
-    if(save_plots == T){
-    ggsave(plot=d_high_low, filename=fs::path(path_results_plots, paste0("density.snvs_distribution_over_enhancers.", marker, ".high_low.", label, ".png")), 
-           device = "png", width = 9.805556, height = 7.027778)}
+    # Save the plot if the flag is set
+    if(save_plots){
+      ggsave(plot=d_high_low, filename=fs::path(path_results_plots, paste0("density.snvs_distribution_over_enhancers.", marker, ".high_low.", label, ".png")), 
+             device = "png", width = 9.805556, height = 7.027778)
+    }
   }
   
-  # Plot density of SNVs distribution over enhancer region - EACH cluster of enhancers
-  if(each_cluster == T){
+  # Plot density of SNVs distribution for each enhancer cluster
+  if(each_cluster){
     d_each <- all_distances %>% 
-      ggplot(., aes(x = dist, gorup = cluster, color = cluster))+
-      geom_density(bw = bw, alpha =0.1)+
-      theme_light()+
+      ggplot(., aes(x = dist, group = cluster, color = cluster)) +
+      geom_density(bw = bw, alpha = 0.1) +
+      theme_light() +
       labs(
         title = paste0("SNVs distribution over ", marker, " enhancers"), 
         x = "distance from summit", y = ""
-        )
+      )
     print("Plotting SNVs distribution over enhancer region - EACH cluster of enhancers")
     print(d_each)
     
-    if(save_plots == T){
-    ggsave(plot=d_each, filename=fs::path(path_results_plots, paste0("density.snvs_distribution_over_enhancers.", marker, ".each_cluster.", label, ".png")), 
-           device = "png", width = 9.805556, height = 7.027778)}
+    # Save the plot if the flag is set
+    if(save_plots){
+      ggsave(plot=d_each, filename=fs::path(path_results_plots, paste0("density.snvs_distribution_over_enhancers.", marker, ".each_cluster.", label, ".png")), 
+             device = "png", width = 9.805556, height = 7.027778)
+    }
   }
 }
 
-
 ##
 
+# Close the PDF device
 dev.off()
 
 ##
+
 
 # Compute & save distances for ICGC 
 
