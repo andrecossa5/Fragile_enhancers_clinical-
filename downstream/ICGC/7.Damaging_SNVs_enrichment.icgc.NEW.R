@@ -11,6 +11,7 @@ set.seed(SEED)
 WIN <- 1000  # Window size for considering SNV and enhancer overlap
 MARKERS <- c("CtIP", "GRHL")  # List of markers to process
 motif_thresh <- 70  # Threshold score percentage for motif matching
+kb <- 2
 
 # Define file paths for input data
 path_variants_anno <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/ICGC/NEW/damaging_variants_annotation/")
@@ -22,6 +23,7 @@ if(location == "hpc"){
   path_anno_ehnacers <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/NEW/", 
                                  sprintf("%skb/data/anno_enhancers/%skb_GRHL2_enhancers.from_SCR_specific_loops.linked_to_DOWN_DEGs.tsv", kb, kb))
 }
+
 
 ##
 

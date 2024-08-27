@@ -24,7 +24,7 @@ set.seed(SEED)
 
 marker <- "GRHL" # Marker for functional genomics analysis
 WIN <- 3000 # Window size in base pairs used for overlap computation with SVs
-loops_kb <- 2 # Loop resolution in kilobases
+loops_kb <- 4 # Loop resolution in kilobases
 naive <- FALSE # Flag to indicate whether to use the naive method for overlap checking
 save_SVs_anno <- FALSE # Flag to indicate whether to save the annotated SVs
 
