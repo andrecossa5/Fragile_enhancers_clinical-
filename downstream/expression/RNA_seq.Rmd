@@ -16,12 +16,12 @@ library(fgsea)
 library(ComplexHeatmap)
 
 # Local 
-#IN_FOLDER <- fs::path("/Users/ieo6983/Desktop/expression/")
-#OUT_FOLDER_DEGs <- fs::path("/Users/ieo6983/Desktop/expression/DEGs/")
+IN_FOLDER <- fs::path("/Users/ieo6983/Desktop/expression/")
+OUT_FOLDER_DEGs <- fs::path("/Users/ieo6983/Desktop/expression/DEGs_length_scaled/")
 
 # HPC
-IN_FOLDER <- fs::path("/hpcnfs/scratch/PGP/ebugani/expression/results/")
-OUT_FOLDER_DEGs <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/expression/RNA_seq/DEGs/")
+#IN_FOLDER <- fs::path("/hpcnfs/scratch/PGP/ebugani/expression/results/")
+#OUT_FOLDER_DEGs <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/expression/RNA_seq/DEGs/")
 
 ```
 
@@ -41,9 +41,9 @@ GRHL2KD#2=S45030
 GRHL2KD#2=S45031
 
 ```{r}
-# Input matrix gene_counts x sample
-g_1st <- read_tsv(fs::path(IN_FOLDER,"results_1st_group/star_salmon/salmon.merged.gene_counts.tsv"))
-g_2nd <- read_tsv(fs::path(IN_FOLDER, "results_2nd_group/star_salmon/salmon.merged.gene_counts.tsv"))
+# Input matrix gene_counts x sample - Length scaled 
+g_1st <- read_tsv(fs::path(IN_FOLDER,"results_1st_group/star_salmon/salmon.merged.gene_counts_length_scaled.tsv"))
+g_2nd <- read_tsv(fs::path(IN_FOLDER, "results_2nd_group/star_salmon/salmon.merged.gene_counts_length_scaled.tsv"))
 
 sum(!g_1st$gene_id == g_2nd$gene_id)
 sum(!g_1st$gene_name == g_2nd$gene_name)
@@ -352,6 +352,9 @@ p2 + geom_text(data = spec_genes, aes(label = gene_name), hjust = -0.1, vjust = 
 
 ### Significantly DEGs ###
 ```{r}
+significance_threshold <- 0.01
+logFC_threshold <- 1
+
 df_export_sig <- df_export %>% filter(padj <= significance_threshold & abs(log2FoldChange) >= logFC_threshold)
 df_LFC_sig <- df_LFC %>% filter(padj <= significance_threshold & abs(log2FoldChange) >= logFC_threshold)
 
@@ -361,7 +364,7 @@ df_LFC_sig$DE <- ifelse(df_LFC_sig$log2FoldChange > 0, "Up", "Down")
 # df_LFC (shrinked) is a smaller version wrt df_export
 sum(!df_LFC_sig$gene_name %in% df_export_sig$gene_name)
 
-#df_LFC_sig %>% arrange(., log2FoldChange) %>% write_tsv(., fs::path(OUT_FOLDER_DEGs, "Df_DEGs.df_LFC_sig.padj_0.01.log2FC_1.Up_and_Down.tsv"))
+#df_LFC_sig %>% arrange(., log2FoldChange) %>% write_tsv(., fs::path(OUT_FOLDER_DEGs, paste0("Df_DEGs.df_LFC_sig.padj_", significance_threshold, ".log2FC_1.Up_and_Down.tsv")))
 
 ```
 
@@ -370,20 +373,23 @@ sum(!df_LFC_sig$gene_name %in% df_export_sig$gene_name)
 ## Enrichment analysis 
 ```{r}
 # Save gene sets for DGE analysis
+save_all <- F
 
-#data.frame(df_LFC_sig[df_LFC_sig$DE == "Up", ]$gene_id) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_LFC_sig.padj_0.05.log2FC_1.UP.tsv"), col_names = F)
-#data.frame(df_LFC_sig[df_LFC_sig$DE == "Up", ]$gene_name) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_LFC_sig.padj_0.05.log2FC_1.UP.names.tsv"), col_names = F)
+if(save_all == T){
+  data.frame(df_LFC_sig[df_LFC_sig$DE == "Up", ]$gene_id) %>% write_tsv(., fs::path(OUT_FOLDER_DEGs, paste0("DEGs.df_LFC_sig.padj_", significance_threshold, ".log2FC_1.UP.tsv")), col_names = F)
+  data.frame(df_LFC_sig[df_LFC_sig$DE == "Up", ]$gene_name) %>% write_tsv(., fs::path(OUT_FOLDER_DEGs, paste0("DEGs.df_LFC_sig.padj_", significance_threshold, ".log2FC_1.UP.names.tsv")), col_names = F)
+  
+  data.frame(df_LFC_sig[df_LFC_sig$DE == "Down", ]$gene_id) %>% write_tsv(., fs::path(OUT_FOLDER_DEGs, paste0("DEGs.df_LFC_sig.padj_", significance_threshold, ".log2FC_1.DOWN.tsv")), col_names = F)
+  data.frame(df_LFC_sig[df_LFC_sig$DE == "Down", ]$gene_name) %>% write_tsv(., fs::path(OUT_FOLDER_DEGs, paste0("DEGs.df_LFC_sig.padj_", significance_threshold, ".log2FC_1.DOWN.names.tsv")), col_names = F)
 
-#data.frame(df_LFC_sig[df_LFC_sig$DE == "Down", ]$gene_id) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_LFC_sig.padj_0.05.log2FC_1.DOWN.tsv"), col_names = F)
-#data.frame(df_LFC_sig[df_LFC_sig$DE == "Down", ]$gene_name) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_LFC_sig.padj_0.05.log2FC_1.DOWN.names.tsv"), col_names = F)
+  # Not shrinked
+  data.frame(df_export_sig[df_export_sig$DE == "Up", ]$gene_id) %>% write_tsv(., fs::path(OUT_FOLDER_DEGs, paste0("DEGs.df_export_sig.padj_", significance_threshold, ".log2FC_1.UP.tsv")), col_names = F)
+  data.frame(df_export_sig[df_export_sig$DE == "Up", ]$gene_name) %>% write_tsv(., fs::path(OUT_FOLDER_DEGs, paste0("DEGs.df_export_sig.padj_", significance_threshold, ".log2FC_1.UP.names.tsv")), col_names = F)
 
+  data.frame(df_export_sig[df_export_sig$DE == "Down", ]$gene_id) %>% write_tsv(., fs::path(OUT_FOLDER_DEGs, paste0("DEGs.df_export_sig.padj_", significance_threshold, ".log2FC_1.Down.tsv")), col_names = F)
+  data.frame(df_export_sig[df_export_sig$DE == "Down", ]$gene_name) %>% write_tsv(., fs::path(OUT_FOLDER_DEGs, paste0("DEGs.df_export_sig.padj_", significance_threshold, ".log2FC_1.Down.names.tsv")), col_names = F)
 
-# Not shrinked
-#data.frame(df_export_sig[df_export_sig$DE == "Up", ]$gene_id) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_export_sig.padj_0.05.log2FC_1.UP.tsv"), col_names = F)
-#data.frame(df_export_sig[df_export_sig$DE == "Up", ]$gene_name) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_export_sig.padj_0.05.log2FC_1.UP.names.tsv"), col_names = F)
-
-#data.frame(df_export_sig[df_export_sig$DE == "Down", ]$gene_id) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_export_sig.padj_0.05.log2FC_1.Down.tsv"), col_names = F)
-#data.frame(df_export_sig[df_export_sig$DE == "Down", ]$gene_name) %>% write_tsv(., paste0(OUT_FOLDER_DEGs, "DEGs.df_export_sig.padj_0.05.log2FC_1.Down.names.tsv"), col_names = F)
+}
 
 ```
 
