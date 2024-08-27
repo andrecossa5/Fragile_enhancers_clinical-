@@ -19,7 +19,7 @@ location <- "local" # 'local' or 'hpc'
 
 ### Hi-ChIP Loops ###
 # Define the resolution that was used to call loops
-kb <- 2
+kb <- 4
 
 # Source custom functions for processing loops
 source("/Users/ieo6983/Desktop/fragile_enhancer_clinical/utils/loops_functions.R")
@@ -30,10 +30,14 @@ path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/dat
 path_enhancers_ctip <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/CtIP_enh.hq_signal.clustered.tsv")
 path_enhancers_grhl <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/GRHL_enh.hq_signal.clustered.tsv")
 path_tss <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/others/TSSs_elisa/TSSs_from_USCS_hg19_EMSEMBL.tsv")
-path_degs <- fs::path("/Users/ieo6983/Desktop/expression/DEGs/Df_DEGs.df_LFC_sig.padj_0.05.log2FC_1.Up_and_Down.tsv")
+path_degs <- fs::path("/Users/ieo6983/Desktop/expression/DEGs_length_scaled/Df_DEGs.df_LFC_sig.padj_0.05.log2FC_1.Up_and_Down.tsv")
 
 # Define path for saving results
 path_results <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/NEW/", kb, "kb"))
+path_results_data <- fs::path(paste0("/Users/ieo6983/Desktop/fragile_enhancer_clinical/results/integrated/NEW/", kb, "kb/data/"))
+if(!dir.exists(path_results_data)){
+  dir.create(path_results_data, recursive = T)
+}
 
 # If running on HPC, update paths for HPC environment
 if(location == "hpc"){
@@ -47,6 +51,10 @@ if(location == "hpc"){
   path_degs <- fs::path("/hpcnfs/scratch/PGP/Ciacci_et_al/results/expression/RNA_seq/DEGs/Df_DEGs.df_LFC_sig.padj_0.05.log2FC_1.Up_and_Down.tsv")
   
   path_results <- fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/NEW/", kb, "kb"))
+  path_results_data <- fs::path(paste0("/hpcnfs/scratch/PGP/Ciacci_et_al/results/integrated/NEW/", kb, "kb/data/"))
+  if(!dir.exists(path_results_data)){
+    dir.create(path_results_data, recursive = T)
+  }
 }
 
 
@@ -78,8 +86,8 @@ dim(kd_specific)[1] + dim(common)[1] == dim(kd)[1]
 sum(duplicated(scr)); sum(duplicated(kd)); sum(duplicated(common));
 
 # Save condition-specific loops
-#scr_specific %>% write_tsv(., fs::path(path_results, paste0("/data/", kb, "kb_SCR_specific_loops.tsv")))
-#kd_specific %>% write_tsv(., fs::path(path_results, paste0("/data/", kb, "kb_KD_specific_loops.tsv")))
+#scr_specific %>% write_tsv(., fs::path(path_results_data, paste0(kb, "kb_SCR_specific_loops.tsv")))
+#kd_specific %>% write_tsv(., fs::path(path_results_data, paste0(kb, "kb_KD_specific_loops.tsv")))
 
 
 ##
@@ -252,8 +260,8 @@ print(sprintf("~%d%% of GRHL2 enhancer-associated loops have at least 1 bin with
 
 
 # Save the annotated DEG-enhancer overlap tables
-#scr_enh_degs %>% write_tsv(., fs::path(path_output, sprintf("/data/%skb_SCR.anno_loops.GRHL2_enh_DEGs_prom",kb), ext = "tsv"))
-#kd_enh_degs %>% write_tsv(., fs::path(path_output, sprintf("/data/%skb_KD.anno_loops.GRHL2_enh_DEGs_prom",kb), ext = "tsv"))
+#scr_enh_degs %>% write_tsv(., fs::path(path_results_data, sprintf("%skb_SCR.anno_loops.GRHL2_enh_DEGs_prom",kb), ext = "tsv"))
+#kd_enh_degs %>% write_tsv(., fs::path(path_results_data, sprintf("%skb_KD.anno_loops.GRHL2_enh_DEGs_prom",kb), ext = "tsv"))
 
 
 ##
@@ -288,8 +296,8 @@ dim(scr_enh_degs_only)[1] == dim(scr_enh_degs_only_spec)[1] + dim(enh_degs_only_
 dim(kd_enh_degs_only)[1] == dim(kd_enh_degs_only_spec)[1] + dim(enh_degs_only_common)[1]
 
 # Save tables for loops involving only one DEG and one enhancer (currently commented out)
-#scr_enh_degs_only %>% write_tsv(., fs::path(path_results, paste0("/data/", kb, "kb_SCR.anno_loops.GRHL2_enh_DEGs_prom_ONLY.tsv")))
-#kd_enh_degs_only %>% write_tsv(., fs::path(path_results, paste0("/data/", kb, "kb_KD.anno_loops.GRHL2_enh_DEGs_prom_ONLY.tsv")))
+#scr_enh_degs_only %>% write_tsv(., fs::path(path_results_data, paste0(kb, "kb_SCR.anno_loops.GRHL2_enh_DEGs_prom_ONLY.tsv")))
+#kd_enh_degs_only %>% write_tsv(., fs::path(path_results_data, paste0(kb, "kb_KD.anno_loops.GRHL2_enh_DEGs_prom_ONLY.tsv")))
 
 # Create data frames to hold statistics for annotated loops
 dfs <- list("scr" = list("tot" = scr_enh_degs, "spec" = scr_enh_degs_spec, 

@@ -18,7 +18,7 @@ path_enhancers <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/dat
 path_enhancers_ctip <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/CtIP_enh.hq_signal.clustered.tsv")
 path_enhancers_grhl <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/Chip/Chip_for_clusters/results/CtIP_GRHL_q05/downstream/GRHL_enh.hq_signal.clustered.tsv")
 path_tss <- fs::path("/Users/ieo6983/Desktop/fragile_enhancer_clinical/data/functional_genomics/others/TSSs_elisa/TSSs_from_USCS_hg19_EMSEMBL.tsv")
-path_degs <- fs::path("/Users/ieo6983/Desktop/expression/DEGs/Df_DEGs.df_LFC_sig.padj_0.05.log2FC_1.Up_and_Down.tsv")
+path_degs <- fs::path("/Users/ieo6983/Desktop/expression/DEGs_length_scaled/Df_DEGs.df_LFC_sig.padj_0.05.log2FC_1.Up_and_Down.tsv")
 
 # MSigDB Gene Set - Can be downloaded at: https://www.gsea-msigdb.org/gsea/msigdb/human/genesets.jsp
 path_hallmark <- fs::path("/Users/ieo6983/Desktop/expression/GSEA/DB/hallmark_gene_sets.h.all.v2023.2.Hs.symbols.gmt")
@@ -123,7 +123,7 @@ for(cond in c("scr", "kd")){
   
   degs_in_loops[[cond]] <- degs_uniq
   # Optionally save DEG data
-  # degs_uniq %>% write_tsv(., fs::path(path_output, sprintf("/data/%skb_%s.DEGs_in_enh_deg_loops",kb, toupper(cond)), ext = "tsv"))
+  #degs_uniq %>% write_tsv(., fs::path(path_results, sprintf("/data/%skb_%s.DEGs_in_enh_deg_loops",kb, toupper(cond)), ext = "tsv"))
 }
 
 # Count the number of unique DEGs involved in loops for each condition

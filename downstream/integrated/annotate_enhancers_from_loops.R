@@ -6,7 +6,7 @@ SEED <- 4321
 set.seed(SEED)
 
 set <- "NEW"  # NEW or OLD, for new or old set of enhancers 
-save_output <- T # Specify whether to save the output or not
+save_output <- F # Specify whether to save the output or not
 location <- "local" # 'local' or 'hpc'
 
 # Define the path to the loops data based on the location and set type
